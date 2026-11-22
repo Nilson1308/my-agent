@@ -1,0 +1,17 @@
+.venv
+venv
+.git
+.gitignore
+__pycache__
+*.py[cod]
+*.egg-info
+.env
+.coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+celerybeat-schedule
+celerybeat.pid
+staticfiles
+terminals
+assets

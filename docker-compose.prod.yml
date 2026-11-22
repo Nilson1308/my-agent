@@ -1,0 +1,69 @@
+x-app-common: &app-common
+  build: .
+  env_file: .env
+  environment:
+    FASTEMBED_CACHE_PATH: /app/.cache/fastembed
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-my_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-my_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-my_agent}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-my_agent} -d ${POSTGRES_DB:-my_agent}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    <<: *app-common
+    command: >
+      gunicorn config.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 2
+      --timeout 120
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - fastembed_cache:/app/.cache/fastembed
+
+  bot:
+    <<: *app-common
+    command: python manage.py run_bot
+    volumes:
+      - fastembed_cache:/app/.cache/fastembed
+
+  celery_worker:
+    <<: *app-common
+    command: celery -A config worker -l info --concurrency=2
+    volumes:
+      - fastembed_cache:/app/.cache/fastembed
+
+  celery_beat:
+    <<: *app-common
+    command: celery -A config beat -l info
+
+volumes:
+  pgdata:
+  fastembed_cache:
