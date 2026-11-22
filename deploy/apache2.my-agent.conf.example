@@ -1,0 +1,42 @@
+# Exemplo: /etc/apache2/sites-available/my-agent.conf
+# sudo a2enmod proxy proxy_http headers ssl rewrite
+# sudo a2ensite my-agent.conf
+# sudo apache2ctl configtest && sudo systemctl reload apache2
+# sudo certbot --apache -d seudominio.com
+
+<VirtualHost *:80>
+    ServerName seudominio.com
+
+    # Redirecionar HTTP → HTTPS (descomente após certbot)
+    # RewriteEngine On
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "http"
+
+    ProxyPass / http://127.0.0.1:8000/
+    ProxyPassReverse / http://127.0.0.1:8000/
+
+    # Uploads (voz no webhook / admin): ajuste se necessário
+    LimitRequestBody 20971520
+</VirtualHost>
+
+# Após certbot, ele costuma criar/atualizar o bloco :443.
+# Exemplo manual:
+#
+# <VirtualHost *:443>
+#     ServerName seudominio.com
+#
+#     SSLEngine on
+#     SSLCertificateFile      /etc/letsencrypt/live/seudominio.com/fullchain.pem
+#     SSLCertificateKeyFile     /etc/letsencrypt/live/seudominio.com/privkey.pem
+#
+#     ProxyPreserveHost On
+#     RequestHeader set X-Forwarded-Proto "https"
+#
+#     ProxyPass / http://127.0.0.1:8000/
+#     ProxyPassReverse / http://127.0.0.1:8000/
+#
+#     LimitRequestBody 20971520
+# </VirtualHost>

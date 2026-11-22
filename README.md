@@ -90,7 +90,9 @@ Admin: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
 ## Deploy em Produção (VPS Ubuntu)
 
-Pré-requisitos na VPS: Docker, Docker Compose plugin e Nginx (opcional, para HTTPS).
+**Apache2 (recomendado neste projeto em produção):** veja `deploy/PRODUCTION_APACHE.md` e `AGENTS.md` (instruções para agentes Cursor). Exemplo de vhost: `deploy/apache2.my-agent.conf.example`.
+
+Pré-requisitos na VPS: Docker, Docker Compose plugin e proxy reverso (Apache2 ou Nginx).
 
 ```bash
 # 1. Clonar o repositório
