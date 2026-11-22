@@ -18,12 +18,20 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         message = options["message"]
-        plan = parse_user_message(message)
+        result = parse_user_message(message)
 
+        self.stdout.write(self.style.HTTP_INFO(f"=== Outcome: {result.outcome} ==="))
         self.stdout.write(self.style.HTTP_INFO("=== JSON Groq (AgentPlan) ==="))
-        self.stdout.write(json.dumps(plan.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        self.stdout.write(
+            json.dumps(result.plan.model_dump(mode="json"), ensure_ascii=False, indent=2)
+        )
 
         self.stdout.write("")
         self.stdout.write(self.style.HTTP_INFO("=== Resposta execute_agent_plan ==="))
-        response = execute_agent_plan(plan, raw_input=message, input_type="text")
+        response = execute_agent_plan(
+            result.plan,
+            raw_input=message,
+            input_type="text",
+            llm_outcome=result.outcome,
+        )
         self.stdout.write(response)

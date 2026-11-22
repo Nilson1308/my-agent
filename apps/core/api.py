@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import logging
+import secrets
+import time
+
 from django.conf import settings
+from django.db import connection
+import redis
 from ninja import NinjaAPI, Schema
 from ninja.security import APIKeyHeader
 
-from apps.bot.notifier import send_telegram_message
+from apps.bot.telegram_client import get_send_failure_count, send_message_sync
+from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
 from apps.memory.services import format_active_shopping_list
+
+logger = logging.getLogger(__name__)
+
+EMPTY_GEOFENCE_MESSAGE = "🛒 Lista de mercado vazia."
 
 
 class GeofenceWebhookAuth(APIKeyHeader):
@@ -13,7 +24,9 @@ class GeofenceWebhookAuth(APIKeyHeader):
 
     def authenticate(self, request, key: str | None):
         expected = (settings.GEOFENCE_WEBHOOK_TOKEN or "").strip()
-        if not expected or not key or key != expected:
+        if not expected or not key:
+            return None
+        if not secrets.compare_digest(expected, key.strip()):
             return None
         return key
 
@@ -25,22 +38,100 @@ class GeofencePayload(Schema):
 class GeofenceOut(Schema):
     status: str
     items_count: int
+    telegram_sent: bool
+
+
+class HealthOut(Schema):
+    status: str
+    database: bool
+    redis: bool
+    telegram_send_failures: int | None = None
 
 
 geofence_auth = GeofenceWebhookAuth()
 api = NinjaAPI(title="My Agent API", version="1.0.0", urls_namespace="core_api")
 
 
+def _check_database() -> bool:
+    try:
+        connection.ensure_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
+def _check_redis() -> bool:
+    try:
+        client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        return client.ping()
+    except redis.RedisError:
+        return False
+
+
+@api.get("/health/", auth=None, response=HealthOut)
+def health(request) -> HealthOut:
+    db_ok = _check_database()
+    redis_ok = _check_redis()
+    overall = "ok" if db_ok and redis_ok else "degraded"
+    return HealthOut(
+        status=overall,
+        database=db_ok,
+        redis=redis_ok,
+        telegram_send_failures=get_send_failure_count(),
+    )
+
+
+def _location_prefix(payload: GeofencePayload | None) -> str:
+    if payload and payload.location:
+        return f"📍 Você chegou em: {payload.location}\n\n"
+    return ""
+
+
 @api.post("/webhooks/geofence/", auth=geofence_auth, response=GeofenceOut)
 def geofence_webhook(request, payload: GeofencePayload | None = None) -> GeofenceOut:
-    _ = payload  # reservado p/ localização futura
+    started = time.monotonic()
+    ip = client_ip(request)
+    enforce_geofence_rate_limit(request)
     message, count = format_active_shopping_list()
+
     if count == 0:
-        return GeofenceOut(status="empty", items_count=0)
+        text = _location_prefix(payload) + EMPTY_GEOFENCE_MESSAGE
+        telegram_sent = send_message_sync(text)
+        status = "empty"
+        _log_geofence(ip, count, telegram_sent, status, started)
+        return GeofenceOut(status=status, items_count=0, telegram_sent=telegram_sent)
 
-    if payload and payload.location:
-        header = f"📍 Você chegou em: {payload.location}\n\n"
-        message = header + message
+    message = _location_prefix(payload) + message
+    telegram_sent = send_message_sync(message)
+    if not telegram_sent:
+        status = "telegram_failed"
+        _log_geofence(ip, count, False, status, started)
+        return GeofenceOut(
+            status=status,
+            items_count=count,
+            telegram_sent=False,
+        )
 
-    send_telegram_message(message)
-    return GeofenceOut(status="sent", items_count=count)
+    status = "sent"
+    _log_geofence(ip, count, True, status, started)
+    return GeofenceOut(status=status, items_count=count, telegram_sent=True)
+
+
+def _log_geofence(
+    ip: str,
+    items_count: int,
+    telegram_sent: bool,
+    status: str,
+    started: float,
+) -> None:
+    duration_ms = int((time.monotonic() - started) * 1000)
+    logger.info(
+        "geofence webhook status=%s items=%s telegram_sent=%s client_ip=%s duration_ms=%s",
+        status,
+        items_count,
+        telegram_sent,
+        ip,
+        duration_ms,
+    )

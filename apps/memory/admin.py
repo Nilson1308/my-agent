@@ -48,8 +48,8 @@ class NoteAdmin(admin.ModelAdmin):
 
 @admin.register(InteractionLog)
 class InteractionLogAdmin(admin.ModelAdmin):
-    list_display = ("id", "input_type", "created_at", "response_preview")
-    list_filter = ("input_type", "created_at")
+    list_display = ("id", "input_type", "llm_outcome", "created_at", "response_preview")
+    list_filter = ("input_type", "llm_outcome", "created_at")
     search_fields = ("raw_input", "bot_response")
     ordering = ("-created_at",)
     readonly_fields = ("created_at",)

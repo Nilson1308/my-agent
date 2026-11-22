@@ -2,7 +2,7 @@
 
 Repositório: `https://github.com/Nilson1308/my-agent.git`
 
-O **Gunicorn** roda dentro do Docker (`web`) em `127.0.0.1:8000`. O **Apache2** no host faz proxy reverso para essa porta. O **bot Telegram**, **Celery worker** e **Celery beat** são containers separados (`docker-compose.prod.yml`).
+O **Gunicorn** roda dentro do Docker (`web`) na porta **8000 do container**, publicado no host em `127.0.0.1:8045` por padrão em `docker-compose.prod.yml` (ajuste se a porta 8000 do host já estiver em uso). O **Apache2** no host faz proxy reverso para essa porta publicada. O **bot Telegram**, **Celery worker** e **Celery beat** são containers separados (`docker-compose.prod.yml`).
 
 ## Arquitetura
 
@@ -79,6 +79,20 @@ curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/admin/login/
 
 Esperado: `200` ou `302`.
 
+Página MacroDroid (sem token): `https://copa.mogidascruzes.sp.gov.br/macro/`
+
+Backup diário (exemplo cron):
+
+```bash
+15 2 * * * cd /var/www/my-projects/my-agent && ./deploy/backup-pgdata.sh
+```
+
+Health check (sem segredo):
+
+```bash
+curl -sS https://copa.mogidascruzes.sp.gov.br/api/health/
+```
+
 ### 4. Apache2
 
 ```bash
@@ -113,24 +127,24 @@ Body JSON: {"location": "mercado"}
 
 ## Atualização de produção (`git pull`)
 
-Fluxo que o operador humano executa no servidor (o agente no Cursor **só propõe** estes comandos; não assume acesso SSH):
+Fluxo recomendado no servidor:
 
 ```bash
-cd /var/www/my-agent    # ajuste se o clone estiver em outro path
+cd /var/www/my-projects/my-agent    # ajuste se o clone estiver em outro path
 git fetch origin
 git pull origin main
-
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec web python manage.py migrate --noinput
+./deploy/reload-prod.sh
 ```
 
-Reinício leve (sem rebuild), se só mudou Python sem deps:
+Só alterou `.env` (Telegram, Groq, `ALLOWED_HOSTS`, geofence):
 
 ```bash
-docker compose -f docker-compose.prod.yml restart web bot celery_worker celery_beat
+./deploy/reload-prod.sh --env-only
 ```
 
-Após mudança em `requirements.txt` ou `Dockerfile`, use sempre `--build`.
+**Não use** `docker-compose restart` isolado após mudar `.env`: o `web` e o `bot` precisam ser **recriados** para ler variáveis novas (`--force-recreate` ou `reload-prod.sh`).
+
+Após mudança em `requirements.txt` ou `Dockerfile`, use `./deploy/reload-prod.sh` (com build), não `--env-only`.
 
 ### Smoke test pós-deploy
 
@@ -162,6 +176,7 @@ sudo tail -f /var/log/apache2/access.log
 | CSRF no admin | `CSRF_TRUSTED_ORIGINS` |
 | Bot offline | logs do serviço `bot`; token Telegram |
 | Webhook 401 | `GEOFENCE_WEBHOOK_TOKEN` / header |
+| Webhook 429 | disparos em menos de `GEOFENCE_RATE_LIMIT_SECONDS` (padrão 120s por IP) |
 
 ---
 

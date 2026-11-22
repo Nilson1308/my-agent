@@ -32,6 +32,13 @@ class ShoppingItem(models.Model):
         ordering = ["-created_at"]
         verbose_name = "item de mercado"
         verbose_name_plural = "itens de mercado"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name"],
+                condition=models.Q(is_bought=False),
+                name="uniq_shopping_pending_name",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -97,6 +104,7 @@ class InteractionLog(models.Model):
     input_type = models.CharField(max_length=16, choices=InputType.choices)
     parsed_json = models.JSONField(null=True, blank=True)
     bot_response = models.TextField(blank=True)
+    llm_outcome = models.CharField(max_length=24, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

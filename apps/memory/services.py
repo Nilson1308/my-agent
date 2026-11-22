@@ -8,6 +8,7 @@ from django.utils import timezone
 from pgvector.django import CosineDistance
 
 from apps.ai.embeddings_service import embed_document, embed_query
+from apps.ai.llm_outcomes import LLM_OK
 from apps.ai.schemas import AgentAction, AgentPlan
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ def execute_agent_plan(
     plan: AgentPlan,
     raw_input: str,
     input_type: str = "text",
+    llm_outcome: str = LLM_OK,
 ) -> str:
     """Executa ações do plano no banco e persiste InteractionLog."""
     lines: list[str] = []
@@ -63,6 +65,7 @@ def execute_agent_plan(
         input_type=input_type,
         parsed_json=parsed,
         bot_response=response,
+        llm_outcome=llm_outcome,
     )
 
     return response
@@ -127,7 +130,14 @@ def _add_shopping(action: AgentAction) -> str:
     qty = (action.quantity or "").strip()
     if qty and (qty.startswith("-") or (qty.isdigit() and int(qty) < 0)):
         raise ValueError("quantity inválida; use remove_shopping ou dedupe_shopping para remover itens")
-    ShoppingItem.objects.create(name=name, quantity=qty)
+    existing = ShoppingItem.objects.filter(is_bought=False, name__iexact=name).first()
+    if existing:
+        if qty and qty != existing.quantity:
+            existing.quantity = qty
+            existing.save(update_fields=["quantity"])
+        suffix = f" ({existing.quantity})" if existing.quantity else ""
+        return f"🛒 Mercado: já na lista — {existing.name}{suffix}"
+    ShoppingItem.objects.create(name=name.strip(), quantity=qty)
     suffix = f" ({qty})" if qty else ""
     return f"🛒 Mercado: + {name}{suffix}"
 

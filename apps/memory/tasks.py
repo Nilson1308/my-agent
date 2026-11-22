@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone
 
 from apps.bot.notifier import send_telegram_message
 from apps.memory.models import DomainContext, Event, Task, TaskStatus
+from apps.memory.services import format_active_shopping_list
 
 
 def _today_bounds() -> tuple[datetime, datetime]:
@@ -71,7 +73,13 @@ def build_morning_briefing_message() -> str:
             due = f" · {task.due_date:%d/%m}" if task.due_date else ""
             lines.append(f"  – {task.title}{due}")
 
-    if not events and not tasks_overdue and not tasks_today and not theo_pending:
+    shopping, shopping_count = format_active_shopping_list()
+    if shopping_count:
+        lines.append(f"\n{shopping}")
+    else:
+        lines.append("\n🛒 Mercado: lista vazia")
+
+    if not events and not tasks_overdue and not tasks_today and not theo_pending and not shopping_count:
         lines.append("\nAgenda livre por aqui. Bom dia!")
 
     return "\n".join(lines)
@@ -87,13 +95,16 @@ def send_morning_briefing() -> dict[str, object]:
 @shared_task(name="apps.memory.tasks.check_upcoming_events")
 def check_upcoming_events() -> dict[str, object]:
     now = timezone.now()
-    window_end = now + timedelta(minutes=35)
+    lead = int(getattr(settings, "EVENT_REMINDER_MINUTES_BEFORE", 30))
+    window = int(getattr(settings, "EVENT_REMINDER_WINDOW_MINUTES", 8))
+    remind_from = now + timedelta(minutes=max(lead - window, 0))
+    remind_until = now + timedelta(minutes=lead + window)
 
     events = list(
         Event.objects.filter(
             reminded=False,
-            start_at__gt=now,
-            start_at__lte=window_end,
+            start_at__gte=remind_from,
+            start_at__lte=remind_until,
         ).order_by("start_at")
     )
 

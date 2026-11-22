@@ -23,21 +23,34 @@ Use este arquivo quando o usuário pedir **publicar, atualizar ou depurar produ�
 | Item | Valor típico |
 |------|----------------|
 | Caminho do clone | `/var/www/my-agent` (confirmar com o usuário) |
-| App HTTP interno | `http://127.0.0.1:8000` (bind do compose) |
-| Proxy público | Apache2 → `ProxyPass / http://127.0.0.1:8000/` |
+| App HTTP interno | `http://127.0.0.1:8045` (host; container escuta 8000) |
+| Proxy público | Apache2 → `ProxyPass / http://127.0.0.1:8045/` |
+| Domínio (este servidor) | `copa.mogidascruzes.sp.gov.br` → `deploy/apache/copa.mogidascruzes.sp.gov.br.conf` |
 | Migrations | Sempre após deploy: `docker compose -f docker-compose.prod.yml exec web python manage.py migrate --noinput` |
 | Rebuild | `docker compose -f docker-compose.prod.yml up -d --build` se `requirements.txt`, `Dockerfile` ou código Python mudou |
 
 ## Fluxo padrão após `git pull` (copiar para o usuário)
 
 ```bash
-cd /var/www/my-agent
+cd /var/www/my-projects/my-agent   # ou /var/www/my-agent no seu clone
 git pull origin main
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec web python manage.py migrate --noinput
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs --tail=30 web bot
+./deploy/reload-prod.sh
 ```
+
+Só mudou `.env` (tokens, ALLOWED_HOSTS, etc.):
+
+```bash
+./deploy/reload-prod.sh --env-only
+```
+
+## Script `deploy/reload-prod.sh`
+
+| Flag | Efeito |
+|------|--------|
+| (nenhuma) | `up -d --build`, migrate, collectstatic, smoke `/admin/login/` |
+| `--env-only` | `up -d --force-recreate` em `web`, `bot`, `celery_worker`, `celery_beat` |
+| `--no-build` | `up -d` sem rebuild |
+| `--no-migrate` | Pula migrate/collectstatic |
 
 ## Apache2 — checklist do agente
 

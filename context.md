@@ -3,19 +3,20 @@
 ## 1. Visão Geral
 Assistente pessoal via **Telegram Bot** para captura rápida (áudio ou texto em linguagem natural), organização de responsabilidades diárias, memória semântica e proatividade (briefings e lembretes).
 
-Uso exclusivo para 1 usuário (single-tenant), focado em baixa fricção, resposta rápida e custo zero de inferência via **Groq Free**.
+Uso exclusivo para 1 usuário (single-tenant), focado em baixa fricção, resposta rápida e custo baixo de inferência via **Groq**.
 
 ## 2. Stack Técnica
-- **Linguagem / Backend:** Python 3.12+, Django 5.x, Django Ninja (ou DRF para webhooks/endpoints internos)
+- **Linguagem / Backend:** Python 3.12+, Django 5.x, Django Ninja (`/api/`)
 - **Banco de Dados:** PostgreSQL com extensão `pgvector` (busca semântica em ideias/notas)
-- **Assincronismo & Proatividade:** Celery + Celery Beat + Redis
-- **Interface Principal:** Telegram Bot API (Webhook ou Long Polling em dev)
-- **IA / Inferência (Groq API - Free Tier):**
-  - Transcrição de áudio: `whisper-large-v3-turbo`
-  - Roteamento, extração de entidades e resposta: `llama-3.3-70b-versatile` (com Structured Outputs / JSON Mode)
-  - Embeddings (local ou leve): `sentence-transformers` (ex: `intfloat/multilingual-e5-small` ou similar) ou API de embeddings compatível com `pgvector`
-- **Infraestrutura:** Ubuntu Linux, Gunicorn, Nginx, Docker / Docker Compose (opcional para dev)
+- **Assincronismo & Proatividade:** Celery + Celery Beat + Redis (`redis-py` ≥ 6.1)
+- **Interface Principal:** Telegram Bot API (long polling em produção no container `bot`)
+- **IA / Inferência (Groq API):**
+  - Transcrição de áudio: `whisper-large-v3-turbo` (`GROQ_WHISPER_MODEL`)
+  - Roteamento e extração: modelo configurável em `GROQ_LLM_MODEL` (padrão atual no `.env`: `openai/gpt-oss-120b`) com JSON estruturado (Pydantic `AgentPlan`)
+  - Embeddings locais: **fastembed** (`paraphrase-multilingual-MiniLM-L12-v2`, 384 dims)
+- **Infraestrutura (produção neste servidor):** Docker Compose (`docker-compose.prod.yml`), Gunicorn no container `web` em `127.0.0.1:8045`, **Apache2** proxy para `https://copa.mogidascruzes.sp.gov.br`
 - **Timezone:** `America/Sao_Paulo`
+- **Deploy:** `./deploy/reload-prod.sh` (build/migrate/collectstatic); `collectstatic` no entrypoint do Gunicorn
 
 ## 3. Contextos e Domínios do Agente
 Toda mensagem (texto ou áudio transcrito) pode conter **uma ou múltiplas intenções** simultâneas. O agente deve quebrar e classificar em:
@@ -25,61 +26,61 @@ Toda mensagem (texto ou áudio transcrito) pode conter **uma ou múltiplas inten
    - Comandos de consulta/baixa (ex: "tô indo no mercado", "já comprei o azeite").
 2. **Tarefas & Pendências (`task`):**
    - Ações com ou sem prazo, categorizadas por contexto: `casa`, `theo`, `trabalho`, `pessoal`.
-   - Ex: "preciso confirmar o horário do treino do Theo na quinta".
 3. **Compromissos (`event`):**
-   - Eventos com data e hora definidas (com suporte futuro a sync com Google Calendar).
-   - Ex: "buscar o Theo na escola quinta às 17h30".
+   - Eventos com data e hora definidas (sync Google Calendar — futuro).
 4. **Ideias & Memória (`note`):**
-   - Pensamentos soltos, insights técnicos, referências e anotações rápidas.
-   - Armazenadas com embedding no `pgvector` para resgate semântico posterior (ex: "qual era aquela ideia de arquitetura que tive semana passada?").
+   - Notas com embedding `pgvector` para busca semântica.
 5. **Consulta (`query`):**
-   - Perguntas sobre o que está pendente, agenda do dia, lista de mercado ou busca na memória vetorial.
+   - Perguntas sobre pendências, agenda, mercado ou memória.
 
 ## 4. Fluxo Principal (Pipeline)
 1. Usuário envia texto ou áudio no Telegram.
-2. Backend valida `TELEGRAM_ALLOWED_USER_ID` (segurança: ignora qualquer outro chat_id).
-3. Se for áudio (`.ogg`), baixa o arquivo e transcreve via Groq (`whisper-large-v3-turbo`).
-4. Envia o texto + data/hora atual (`America/Sao_Paulo`) para o LLM (`llama-3.3-70b-versatile`) com JSON Schema estrito.
-5. O LLM retorna uma lista de ações estruturadas (`actions: [...]`).
-6. O backend executa cada ação no PostgreSQL (cria item de mercado, tarefa, evento, nota com embedding ou executa busca).
-7. O bot responde no Telegram confirmando de forma curta e escaneável o que foi registrado/encontrado.
+2. Backend valida `TELEGRAM_ALLOWED_USER_ID` (ignora outros `chat_id`).
+3. Áudio: transcrição Groq (`whisper-large-v3-turbo`).
+4. Texto + contexto temporal (`America/Sao_Paulo`) → LLM (`GROQ_LLM_MODEL`) → `AgentPlan`.
+5. `apps/memory/services.execute_agent_plan` persiste no PostgreSQL.
+6. Resposta curta no Telegram; envio síncrono compartilhado em `apps/bot/telegram_client.py`.
 
 ## 5. Proatividade & Automações
-- **Briefing Matinal (Celery Beat — 07h30 diário):**
-  - Envia mensagem única no Telegram com: compromissos do dia, tarefas atrasadas/para hoje e pendências do contexto `theo`.
-- **Lembretes de Compromissos (Celery Beat — a cada 15 min):**
-  - Notifica no Telegram 30 minutos antes de qualquer evento agendado.
-- **Webhook de Geofencing (`POST /api/webhooks/geofence/`):**
-  - Endpoint autenticado por token simples no header (`X-Webhook-Token`).
-  - Recebe gatilho do celular (MacroDroid / Atalhos) ao chegar no mercado e dispara imediatamente a lista de compras ativa no Telegram.
+- **Briefing Matinal (Celery Beat — 07h30):** compromissos do dia, tarefas atrasadas/para hoje, pendências `theo`, **lista de mercado ativa** (ou “lista vazia”).
+- **Lembretes de Compromissos (a cada 15 min):** ~30 min antes do `start_at` (janela 35 min no código).
+- **Webhook Geofencing** `POST /api/webhooks/geofence/`:
+  - Header `X-Webhook-Token` (`GEOFENCE_WEBHOOK_TOKEN`; comparação com `secrets.compare_digest`).
+  - Rate limit por IP via Redis (`GEOFENCE_RATE_LIMIT_SECONDS`, padrão 120).
+  - Resposta JSON: `status`, `items_count`, `telegram_sent` (`sent` | `empty` | `telegram_failed`).
+  - Lista vazia: envia mensagem curta no Telegram + `status=empty`.
+  - MacroDroid / Atalhos no celular (domínio público **copa**).
 
 ## 6. Modelagem Inicial (Django Models)
-- `ShoppingItem`: `name`, `quantity` (opcional), `is_bought` (bool), `created_at`, `bought_at`
-- `Task`: `title`, `context` (choices: casa, theo, trabalho, pessoal), `due_date` (nullable), `status` (pending, done), `created_at`
-- `Event`: `title`, `context`, `start_at`, `end_at` (nullable), `reminded` (bool), `created_at`
-- `Note`: `content`, `context`, `embedding` (`VectorField`), `created_at`
-- `InteractionLog`: `raw_input`, `input_type` (text/audio), `parsed_json`, `bot_response`, `created_at`
+- `ShoppingItem`, `Task`, `Event`, `Note` (+ `VectorField`), `InteractionLog` — ver `apps/memory/models.py`.
 
 ## 7. Variáveis de Ambiente (.env)
-- `DEBUG`, `SECRET_KEY`, `ALLOWED_HOSTS`
-- `DATABASE_URL` (PostgreSQL com pgvector)
-- `REDIS_URL`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_ALLOWED_USER_ID`
-- `GROQ_API_KEY`
-- `GEOFENCE_WEBHOOK_TOKEN`
+- `DEBUG`, `SECRET_KEY`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
+- `DATABASE_URL`, `REDIS_URL`, `POSTGRES_*`
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_ID`
+- `GROQ_API_KEY`, `GROQ_LLM_MODEL`, `GROQ_WHISPER_MODEL`
+- `GEOFENCE_WEBHOOK_TOKEN`, `GEOFENCE_RATE_LIMIT_SECONDS`
+- TTS: `TTS_ENABLED`, `TTS_VOICE`, `TTS_MAX_CHARS`
 
-## 8. Diretrizes de Código para o Agente (Cursor)
-- Manter arquitetura limpa e modular: separar `apps/core`, `apps/bot`, `apps/ai` e `apps/memory`.
-- Lógica de negócio em `services.py`, nunca inflar views ou handlers do Telegram.
-- Usar tipagem Python (`type hints`) e Pydantic para validar os Structured Outputs da Groq.
-- Tratar falhas de rede/API da Groq e Telegram com fallback amigável ao usuário.
-- Priorizar entrega incremental (MVP funcional primeiro, otimizações depois).
+## 8. API interna
+- `GET /api/health/` — PostgreSQL + Redis (sem autenticação; inclui contador `telegram_send_failures` se Redis disponível).
 
-## 9. Roadmap de Execução (Fase 1 - MVP)
-1. Setup do projeto Django + PostgreSQL (`pgvector`) + Redis + Celery.
-2. Criação dos models e migrations.
-3. Serviço `apps/ai/groq_service.py` (Whisper + Llama 3.3 JSON router).
-4. Bot Telegram (webhook/polling) com trava de `TELEGRAM_ALLOWED_USER_ID`.
-5. Task Celery Beat para Briefing Matinal e lembretes.
-6. Endpoint de webhook para Geofencing do mercado.
+## 9. Diretrizes de Código
+- Lógica em `services.py`; Telegram síncrono centralizado em `telegram_client.py`.
+- Tipagem + Pydantic para saídas Groq.
+- Testes: `python manage.py test apps.core apps.memory`.
+
+## 10. Infra e evolução
+- **Compose:** `name: my-agent` (`docker-compose -p my-agent -f docker-compose.prod.yml`).
+- **Backup DB:** `./deploy/backup-pgdata.sh` (retenção 14 dias em `backups/`).
+- **MacroDroid:** página `/macro/` (instruções curl; token não exposto).
+- **Google Calendar:** fase 2 — `docs/GOOGLE_CALENDAR_PHASE2.md`.
+
+## 11. Modelagem / LLM
+- Mercado: constraint única em `ShoppingItem.name` enquanto `is_bought=False`; `add_shopping` idempotente (iexact).
+- Lembretes: `EVENT_REMINDER_MINUTES_BEFORE` (30) ± `EVENT_REMINDER_WINDOW_MINUTES` (8).
+- `InteractionLog.llm_outcome` + comando `python manage.py review_llm_logs`.
+- `parse_user_message` → `LlmParseResult` (ok, fallback, parse_error, groq_rate_limit, …).
+
+## 12. Roadmap (pós-MVP)
+- CI pytest, hardening admin, body form no geofence (MacroDroid).

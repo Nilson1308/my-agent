@@ -15,8 +15,8 @@
     ProxyPreserveHost On
     RequestHeader set X-Forwarded-Proto "http"
 
-    ProxyPass / http://127.0.0.1:8000/
-    ProxyPassReverse / http://127.0.0.1:8000/
+    ProxyPass / http://127.0.0.1:8045/
+    ProxyPassReverse / http://127.0.0.1:8045/
 
     # Uploads (voz no webhook / admin): ajuste se necessário
     LimitRequestBody 20971520
@@ -35,8 +35,8 @@
 #     ProxyPreserveHost On
 #     RequestHeader set X-Forwarded-Proto "https"
 #
-#     ProxyPass / http://127.0.0.1:8000/
-#     ProxyPassReverse / http://127.0.0.1:8000/
+#     ProxyPass / http://127.0.0.1:8045/
+#     ProxyPassReverse / http://127.0.0.1:8045/
 #
 #     LimitRequestBody 20971520
 # </VirtualHost>

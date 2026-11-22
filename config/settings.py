@@ -23,11 +23,15 @@ if DEBUG:
     for dev_tunnel_host in (".trycloudflare.com",):
         if dev_tunnel_host not in ALLOWED_HOSTS:
             ALLOWED_HOSTS.append(dev_tunnel_host)
-    _csrf_origins = os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
-    if _csrf_origins:
-        CSRF_TRUSTED_ORIGINS = [
-            origin.strip() for origin in _csrf_origins.split(",") if origin.strip()
-        ]
+
+_csrf_origins = os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
+if _csrf_origins:
+    CSRF_TRUSTED_ORIGINS = [
+        origin.strip() for origin in _csrf_origins.split(",") if origin.strip()
+    ]
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -44,6 +48,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -133,6 +138,12 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_LLM_MODEL = os.getenv("GROQ_LLM_MODEL", "openai/gpt-oss-120b")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 GEOFENCE_WEBHOOK_TOKEN = os.getenv("GEOFENCE_WEBHOOK_TOKEN", "")
+GEOFENCE_RATE_LIMIT_SECONDS = int(os.getenv("GEOFENCE_RATE_LIMIT_SECONDS", "120"))
+
+# Lembrete de compromisso: ~EVENT_REMINDER_MINUTES_BEFORE (janela ± EVENT_REMINDER_WINDOW_MINUTES).
+# Celery Beat consulta a cada 15 min — mantenha window ≥ metade do intervalo do beat.
+EVENT_REMINDER_MINUTES_BEFORE = int(os.getenv("EVENT_REMINDER_MINUTES_BEFORE", "30"))
+EVENT_REMINDER_WINDOW_MINUTES = int(os.getenv("EVENT_REMINDER_WINDOW_MINUTES", "8"))
 
 TTS_ENABLED = os.getenv("TTS_ENABLED", "True").lower() in ("true", "1", "yes")
 TTS_VOICE = os.getenv("TTS_VOICE", "pt-BR-AntonioNeural")

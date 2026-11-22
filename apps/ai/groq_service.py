@@ -9,6 +9,16 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from groq import APIConnectionError, APIStatusError, Groq, RateLimitError
 
+from apps.ai.llm_outcomes import (
+    LLM_EMPTY_INPUT,
+    LLM_FALLBACK,
+    LLM_GROQ_API,
+    LLM_GROQ_RATE_LIMIT,
+    LLM_NO_KEY,
+    LLM_OK,
+    LLM_PARSE_ERROR,
+    LlmParseResult,
+)
 from apps.ai.schemas import AgentPlan
 
 logger = logging.getLogger(__name__)
@@ -24,12 +34,14 @@ WEEKDAYS_PT = (
     "domingo",
 )
 
+
 def _llm_model() -> str:
     return settings.GROQ_LLM_MODEL or "openai/gpt-oss-120b"
 
 
 def _whisper_model() -> str:
     return settings.GROQ_WHISPER_MODEL or "whisper-large-v3-turbo"
+
 
 FALLBACK_PLAN = AgentPlan(
     actions=[],
@@ -39,6 +51,11 @@ FALLBACK_PLAN = AgentPlan(
 
 def _client() -> Groq:
     return Groq(api_key=settings.GROQ_API_KEY)
+
+
+def _fallback(outcome: str, plan: AgentPlan | None = None) -> LlmParseResult:
+    logger.info("llm_parse outcome=%s", outcome)
+    return LlmParseResult(plan=plan or FALLBACK_PLAN, outcome=outcome)
 
 
 def _now_context_line() -> str:
@@ -106,6 +123,7 @@ Regras:
   * add_note: content, context
   * search_notes: query (obrigatório; NUNCA use sem query)
   * summarize: sem campos — visão geral: mercado + tarefas pendentes + compromissos + últimas notas
+- Mercado: não duplique itens já pendentes — prefira dedupe_shopping ou omita add_shopping repetido.
 - Duplicatas no mercado: use dedupe_shopping (NUNCA invente add_shopping com quantidade negativa).
 - Remover/apagar/excluir tarefa: delete_task. Concluir/marcar feito: complete_task.
 - Inferir "context" quando óbvio (Theo -> theo, mercado/casa -> casa).
@@ -141,19 +159,25 @@ def transcribe_audio(file_path: str) -> str:
         raise
 
 
-def parse_user_message(text: str) -> AgentPlan:
+def parse_user_message(text: str) -> LlmParseResult:
     """Envia texto ao LLM Groq e valida a saída como AgentPlan."""
     if not settings.GROQ_API_KEY:
         logger.warning("GROQ_API_KEY ausente; retornando plano fallback")
-        return FALLBACK_PLAN.model_copy(
-            update={"reply_hint": "Configure GROQ_API_KEY para usar a IA."}
+        return _fallback(
+            LLM_NO_KEY,
+            FALLBACK_PLAN.model_copy(
+                update={"reply_hint": "Configure GROQ_API_KEY para usar a IA."}
+            ),
         )
 
     trimmed = text.strip()
     if not trimmed:
-        return AgentPlan(
-            actions=[],
-            reply_hint="Não recebi texto para processar.",
+        return LlmParseResult(
+            plan=AgentPlan(
+                actions=[],
+                reply_hint="Não recebi texto para processar.",
+            ),
+            outcome=LLM_EMPTY_INPUT,
         )
 
     client = _client()
@@ -170,7 +194,7 @@ def parse_user_message(text: str) -> AgentPlan:
         raw = (completion.choices[0].message.content or "").strip()
         if not raw:
             logger.warning("Groq retornou JSON vazio")
-            return FALLBACK_PLAN
+            return _fallback(LLM_FALLBACK)
 
         payload = json.loads(raw)
         if "actions" not in payload:
@@ -182,14 +206,20 @@ def parse_user_message(text: str) -> AgentPlan:
 
         plan = AgentPlan.model_validate(payload)
         if not plan.actions and not plan.reply_hint:
-            plan = plan.model_copy(update={"reply_hint": FALLBACK_PLAN.reply_hint})
-        return plan
+            return _fallback(
+                LLM_FALLBACK,
+                plan.model_copy(update={"reply_hint": FALLBACK_PLAN.reply_hint}),
+            )
+        return LlmParseResult(plan=plan, outcome=LLM_OK)
     except json.JSONDecodeError as exc:
         logger.exception("JSON inválido da Groq: %s", exc)
-        return FALLBACK_PLAN
+        return _fallback(LLM_PARSE_ERROR)
+    except RateLimitError as exc:
+        logger.exception("Groq rate limit: %s", exc)
+        return _fallback(LLM_GROQ_RATE_LIMIT)
+    except (APIConnectionError, APIStatusError) as exc:
+        logger.exception("Erro de API Groq: %s", exc)
+        return _fallback(LLM_GROQ_API)
     except Exception as exc:
-        if isinstance(exc, (APIConnectionError, RateLimitError, APIStatusError)):
-            logger.exception("Erro de API Groq: %s", exc)
-        else:
-            logger.exception("Erro ao parsear plano: %s", exc)
-        return FALLBACK_PLAN
+        logger.exception("Erro ao parsear plano: %s", exc)
+        return _fallback(LLM_FALLBACK)

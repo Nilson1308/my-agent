@@ -1,3 +1,5 @@
+name: my-agent
+
 x-app-common: &app-common
   build: .
   env_file: .env
@@ -44,7 +46,7 @@ services:
       --workers 2
       --timeout 120
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8045:8000"
     volumes:
       - fastembed_cache:/app/.cache/fastembed
 

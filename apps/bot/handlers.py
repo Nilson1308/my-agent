@@ -135,11 +135,12 @@ async def _with_typing(
 
 
 async def _run_pipeline(raw_input: str, input_type: str) -> str:
-    plan = await sync_to_async(parse_user_message, thread_sensitive=False)(raw_input)
+    parse_result = await sync_to_async(parse_user_message, thread_sensitive=False)(raw_input)
     return await sync_to_async(execute_agent_plan, thread_sensitive=True)(
-        plan,
+        parse_result.plan,
         raw_input,
         input_type,
+        parse_result.outcome,
     )
 
 

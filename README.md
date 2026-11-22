@@ -80,6 +80,16 @@ curl.exe -X POST "http://127.0.0.1:8000/api/webhooks/geofence/" `
 
 Admin: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
 
+**Testes:**
+
+```bash
+python manage.py test apps.core apps.memory
+# produção (Docker):
+docker-compose -f docker-compose.prod.yml exec web python manage.py test apps.core apps.memory
+```
+
+**Health (produção):** `GET https://copa.mogidascruzes.sp.gov.br/api/health/`
+
 ## Estrutura
 
 - `config/` — settings, URLs, WSGI/ASGI, Celery
