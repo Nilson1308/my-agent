@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { completeTask, markShoppingBought } from "./api/mutations";
+import {
+  completeTask,
+  dismissEvent,
+  markShoppingBought,
+  unmarkShoppingBought,
+} from "./api/mutations";
 import {
   fetchSnapshot,
   formatDate,
@@ -21,6 +26,7 @@ const loginToken = ref("");
 const authenticated = ref(false);
 const busyShopping = ref<Set<number>>(new Set());
 const busyTasks = ref<Set<number>>(new Set());
+const busyEvents = ref<Set<number>>(new Set());
 
 const generatedLabel = computed(() =>
   snapshot.value ? formatGeneratedAt(snapshot.value.generated_at) : ""
@@ -70,11 +76,41 @@ async function toggleBought(itemId: number) {
   error.value = "";
   try {
     await markShoppingBought(itemId);
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao marcar item";
   } finally {
     busyShopping.value.delete(itemId);
+  }
+}
+
+async function undoBought(itemId: number) {
+  if (busyShopping.value.has(itemId)) return;
+  busyShopping.value.add(itemId);
+  error.value = "";
+  try {
+    await unmarkShoppingBought(itemId);
+    await load();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao desfazer";
+  } finally {
+    busyShopping.value.delete(itemId);
+  }
+}
+
+async function markEventDone(eventId: number) {
+  if (busyEvents.value.has(eventId)) return;
+  busyEvents.value.add(eventId);
+  error.value = "";
+  try {
+    await dismissEvent(eventId);
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
+    await load();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao encerrar compromisso";
+  } finally {
+    busyEvents.value.delete(eventId);
   }
 }
 
@@ -225,6 +261,31 @@ onMounted(() => {
         <p v-else class="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-center text-slate-400">
           Lista vazia.
         </p>
+        <div
+          v-if="snapshot.shopping.bought_recent?.length"
+          class="mt-8 border-t border-slate-800 pt-6"
+        >
+          <h3 class="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">
+            Comprados recentes
+          </h3>
+          <ul class="space-y-2">
+            <li
+              v-for="item in snapshot.shopping.bought_recent"
+              :key="`b-${item.id}`"
+              class="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/60 px-4 py-2.5 text-sm opacity-90"
+            >
+              <span class="flex-1 text-slate-400 line-through">{{ item.name }}</span>
+              <button
+                type="button"
+                class="rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 disabled:opacity-40"
+                :disabled="busyShopping.has(item.id)"
+                @click="undoBought(item.id)"
+              >
+                Desfazer
+              </button>
+            </li>
+          </ul>
+        </div>
       </section>
 
       <section v-else-if="tab === 'today' && snapshot" class="space-y-6">
@@ -260,11 +321,22 @@ onMounted(() => {
             <li
               v-for="ev in snapshot.events_today"
               :key="ev.id"
-              class="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm"
+              class="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm"
             >
-              <span class="text-slate-400">[{{ ev.context }}]</span>
-              {{ ev.title }}
-              <span class="text-slate-500"> · {{ formatTime(ev.start_at) }}</span>
+              <button
+                type="button"
+                class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-700/60 bg-amber-950/30 text-amber-300 disabled:opacity-40"
+                :disabled="busyEvents.has(ev.id)"
+                :aria-label="`Marcar ${ev.title} como feito`"
+                @click="markEventDone(ev.id)"
+              >
+                {{ busyEvents.has(ev.id) ? "…" : "✓" }}
+              </button>
+              <span class="flex-1">
+                <span class="text-slate-400">[{{ ev.context }}]</span>
+                {{ ev.title }}
+                <span class="text-slate-500"> · {{ formatTime(ev.start_at) }}</span>
+              </span>
             </li>
           </ul>
           <p v-else class="text-sm text-slate-500">Nada na agenda hoje.</p>

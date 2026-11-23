@@ -13,7 +13,12 @@ from ninja.security import APIKeyHeader
 
 from apps.bot.telegram_client import get_send_failure_count, send_message_sync
 from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
-from apps.memory.pwa_mutations import PwaMutationError, pwa_complete_task, pwa_mark_shopping_bought
+from apps.memory.pwa_mutations import (
+    PwaMutationError,
+    pwa_complete_task,
+    pwa_dismiss_event,
+    pwa_mark_shopping_bought,
+)
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
 
@@ -159,6 +164,17 @@ class TaskPatchOut(Schema):
     completed_at: str
 
 
+class EventPatchIn(Schema):
+    dismissed: bool = True
+
+
+class EventPatchOut(Schema):
+    id: int
+    title: str
+    dismissed: bool
+    was_at: str
+
+
 def _pwa_mutation_http(exc: PwaMutationError) -> None:
     code = 404 if exc.code == "not_found" else 409 if exc.code == "already_done" else 400
     raise HttpError(code, exc.message)
@@ -185,6 +201,21 @@ def pwa_shopping_patch(request, item_id: int, payload: ShoppingPatchIn):
 def pwa_task_complete(request, task_id: int):
     try:
         return pwa_complete_task(task_id)
+    except PwaMutationError as exc:
+        _pwa_mutation_http(exc)
+    raise HttpError(500, "Erro interno")
+
+
+@api.patch(
+    "/pwa/events/{event_id}/",
+    auth=pwa_token_auth,
+    response={200: EventPatchOut, 404: dict},
+)
+def pwa_event_dismiss(request, event_id: int, payload: EventPatchIn):
+    if not payload.dismissed:
+        raise HttpError(400, "Apenas dismissed=true é suportado.")
+    try:
+        return pwa_dismiss_event(event_id)
     except PwaMutationError as exc:
         _pwa_mutation_http(exc)
     raise HttpError(500, "Erro interno")

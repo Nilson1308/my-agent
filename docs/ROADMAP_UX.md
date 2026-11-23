@@ -1,6 +1,6 @@
 # Roadmap de interação e confiabilidade — my-agent
 
-**Status:** Ondas 1–3 concluídas no bot/API (Nov/2025). Próximo: **work-agent** (PWA profissional).
+**Status:** Ondas 1–3 no bot; **Onda 4 (PWA)** em `docs/ROADMAP_PWA_ONDA4.md`.
 
 ---
 

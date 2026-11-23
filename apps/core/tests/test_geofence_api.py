@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from django.test import Client, TestCase, override_settings
+from datetime import timedelta
 
-from apps.memory.models import ShoppingItem, Task
+from django.test import Client, TestCase, override_settings
+from django.utils import timezone
+
+from apps.memory.models import Event, ShoppingItem, Task
 
 
 @override_settings(
@@ -87,6 +90,34 @@ class PwaApiTests(TestCase):
         self.assertEqual(r2.status_code, 200)
         task.refresh_from_db()
         self.assertEqual(task.status, "done")
+
+    def test_pwa_undo_shopping_and_dismiss_event(self) -> None:
+        item = ShoppingItem.objects.create(name="Arroz", is_bought=True, bought_at=timezone.now())
+        client = Client()
+        headers = {"HTTP_X_PWA_TOKEN": "test-pwa-token"}
+        r = client.patch(
+            f"/api/pwa/shopping/{item.pk}/",
+            data='{"bought": false}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        item.refresh_from_db()
+        self.assertFalse(item.is_bought)
+
+        ev = Event.objects.create(
+            title="Dentista",
+            context="pessoal",
+            start_at=timezone.now() + timedelta(hours=1),
+        )
+        r2 = client.patch(
+            f"/api/pwa/events/{ev.pk}/",
+            data='{"dismissed": true}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertFalse(Event.objects.filter(pk=ev.pk).exists())
 
 
 @override_settings()

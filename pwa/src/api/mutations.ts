@@ -15,7 +15,10 @@ async function parseError(res: Response): Promise<string> {
   return `Erro (${res.status})`;
 }
 
-export async function markShoppingBought(itemId: number): Promise<void> {
+export async function patchShoppingBought(
+  itemId: number,
+  bought: boolean
+): Promise<void> {
   const base = apiBase();
   const res = await fetch(`${base}/api/pwa/shopping/${itemId}/`, {
     method: "PATCH",
@@ -24,10 +27,18 @@ export async function markShoppingBought(itemId: number): Promise<void> {
       "Content-Type": "application/json",
       ...pwaAuthHeaders(),
     },
-    body: JSON.stringify({ bought: true }),
+    body: JSON.stringify({ bought }),
   });
   if (res.status === 401) throw new Error("Token inválido ou ausente.");
   if (!res.ok) throw new Error(await parseError(res));
+}
+
+export async function markShoppingBought(itemId: number): Promise<void> {
+  return patchShoppingBought(itemId, true);
+}
+
+export async function unmarkShoppingBought(itemId: number): Promise<void> {
+  return patchShoppingBought(itemId, false);
 }
 
 export async function completeTask(taskId: number): Promise<void> {
@@ -38,6 +49,21 @@ export async function completeTask(taskId: number): Promise<void> {
       Accept: "application/json",
       ...pwaAuthHeaders(),
     },
+  });
+  if (res.status === 401) throw new Error("Token inválido ou ausente.");
+  if (!res.ok) throw new Error(await parseError(res));
+}
+
+export async function dismissEvent(eventId: number): Promise<void> {
+  const base = apiBase();
+  const res = await fetch(`${base}/api/pwa/events/${eventId}/`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...pwaAuthHeaders(),
+    },
+    body: JSON.stringify({ dismissed: true }),
   });
   if (res.status === 401) throw new Error("Token inválido ou ausente.");
   if (!res.ok) throw new Error(await parseError(res));

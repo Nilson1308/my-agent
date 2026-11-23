@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 
 from django.utils import timezone
 
+RECENT_BOUGHT_DAYS = 7
+RECENT_BOUGHT_LIMIT = 20
+
 from apps.memory.models import Event, ShoppingItem, Task, TaskStatus
 from apps.memory.services import format_active_shopping_list
 
@@ -22,6 +25,18 @@ def build_pwa_snapshot() -> dict:
     items = [
         {"id": i.pk, "name": i.name, "quantity": i.quantity or ""}
         for i in ShoppingItem.objects.filter(is_bought=False).order_by("name")[:200]
+    ]
+    since_bought = timezone.now() - timedelta(days=RECENT_BOUGHT_DAYS)
+    bought_recent = [
+        {
+            "id": i.pk,
+            "name": i.name,
+            "quantity": i.quantity or "",
+            "bought_at": timezone.localtime(i.bought_at).isoformat() if i.bought_at else None,
+        }
+        for i in ShoppingItem.objects.filter(is_bought=True, bought_at__gte=since_bought).order_by(
+            "-bought_at"
+        )[:RECENT_BOUGHT_LIMIT]
     ]
 
     tasks = list(
@@ -57,6 +72,7 @@ def build_pwa_snapshot() -> dict:
             "count": shopping_count,
             "text": shopping_text,
             "items": items,
+            "bought_recent": bought_recent,
         },
         "tasks_pending": task_payload,
         "events_today": event_payload,

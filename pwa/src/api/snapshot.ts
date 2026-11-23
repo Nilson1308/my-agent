@@ -1,6 +1,7 @@
 import { pwaAuthHeaders } from "../auth";
 
 export type ShoppingItemRow = { id: number; name: string; quantity: string };
+export type ShoppingBoughtRow = ShoppingItemRow & { bought_at: string | null };
 export type TaskRow = {
   id: number;
   title: string;
@@ -21,6 +22,7 @@ export type PwaSnapshot = {
     count: number;
     text: string;
     items: ShoppingItemRow[];
+    bought_recent: ShoppingBoughtRow[];
   };
   tasks_pending: TaskRow[];
   events_today: EventRow[];

@@ -14,6 +14,9 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). API read-only; `work-agent` reu
 
 - `PATCH /api/pwa/shopping/{id}/` — body `{"bought": true}` (marca comprado)
 - `PATCH /api/pwa/tasks/{id}/` — conclui tarefa pendente
+- `PATCH /api/pwa/shopping/{id}/` — `{"bought": false}` desfaz compra
+- `PATCH /api/pwa/events/{id}/` — `{"dismissed": true}` remove compromisso
+- Snapshot inclui `shopping.bought_recent` (7 dias)
 
 **Erros:**
 

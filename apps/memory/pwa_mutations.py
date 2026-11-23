@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.utils import timezone
 
-from apps.memory.models import ShoppingItem, Task, TaskStatus
+from apps.memory.models import Event, ShoppingItem, Task, TaskStatus
 
 
 class PwaMutationError(Exception):
@@ -46,3 +46,13 @@ def pwa_complete_task(task_id: int) -> dict:
         "status": task.status,
         "completed_at": timezone.localtime(now).isoformat(),
     }
+
+
+def pwa_dismiss_event(event_id: int) -> dict:
+    event = Event.objects.filter(pk=event_id).first()
+    if not event:
+        raise PwaMutationError("not_found", "Compromisso não encontrado.")
+    title = event.title
+    start = timezone.localtime(event.start_at).isoformat()
+    event.delete()
+    return {"id": event_id, "title": title, "dismissed": True, "was_at": start}
