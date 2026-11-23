@@ -11,11 +11,11 @@ Superfície **`/app/`** evoluindo de leitora para **painel tátil** do my-agent,
 | Concluir tarefa | `PATCH .../tasks/{id}/` |
 | **Compromisso feito** | `PATCH .../events/{id}/` `dismissed: true` (remove da agenda) |
 
-## 4.2 Captura rápida (próximo slice)
+## 4.2 Captura rápida ✅ implementado
 
 - `POST /api/pwa/shopping/` — nome + qty opcional  
 - `POST /api/pwa/tasks/` — título + contexto opcional  
-- FAB “+” no PWA; validação mínima; sem Groq  
+- FAB “+” no PWA; duplicata no mercado → 409  
 
 ## 4.3 Desfazer tarefa e histórico
 

@@ -16,6 +16,8 @@ from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
 from apps.memory.pwa_mutations import (
     PwaMutationError,
     pwa_complete_task,
+    pwa_create_shopping,
+    pwa_create_task,
     pwa_dismiss_event,
     pwa_mark_shopping_bought,
 )
@@ -176,8 +178,61 @@ class EventPatchOut(Schema):
 
 
 def _pwa_mutation_http(exc: PwaMutationError) -> None:
-    code = 404 if exc.code == "not_found" else 409 if exc.code == "already_done" else 400
+    if exc.code == "not_found":
+        code = 404
+    elif exc.code in ("already_done", "duplicate"):
+        code = 409
+    else:
+        code = 400
     raise HttpError(code, exc.message)
+
+
+class ShoppingCreateIn(Schema):
+    name: str
+    quantity: str = ""
+
+
+class ShoppingCreateOut(Schema):
+    id: int
+    name: str
+    quantity: str
+
+
+class TaskCreateIn(Schema):
+    title: str
+    context: str | None = None
+
+
+class TaskCreateOut(Schema):
+    id: int
+    title: str
+    context: str
+
+
+@api.post(
+    "/pwa/shopping/",
+    auth=pwa_token_auth,
+    response={200: ShoppingCreateOut, 409: dict, 400: dict},
+)
+def pwa_shopping_create(request, payload: ShoppingCreateIn):
+    try:
+        return pwa_create_shopping(payload.name, payload.quantity)
+    except PwaMutationError as exc:
+        _pwa_mutation_http(exc)
+    raise HttpError(500, "Erro interno")
+
+
+@api.post(
+    "/pwa/tasks/",
+    auth=pwa_token_auth,
+    response={200: TaskCreateOut, 409: dict, 400: dict},
+)
+def pwa_task_create(request, payload: TaskCreateIn):
+    try:
+        return pwa_create_task(payload.title, payload.context)
+    except PwaMutationError as exc:
+        _pwa_mutation_http(exc)
+    raise HttpError(500, "Erro interno")
 
 
 @api.patch(

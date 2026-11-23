@@ -119,6 +119,33 @@ class PwaApiTests(TestCase):
         self.assertEqual(r2.status_code, 200)
         self.assertFalse(Event.objects.filter(pk=ev.pk).exists())
 
+    def test_pwa_create_shopping_and_task(self) -> None:
+        client = Client()
+        headers = {"HTTP_X_PWA_TOKEN": "test-pwa-token"}
+        r1 = client.post(
+            "/api/pwa/shopping/",
+            data='{"name": "Iogurte", "quantity": "2"}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.assertTrue(ShoppingItem.objects.filter(name__iexact="Iogurte", is_bought=False).exists())
+        r1b = client.post(
+            "/api/pwa/shopping/",
+            data='{"name": "Iogurte"}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r1b.status_code, 409)
+        r2 = client.post(
+            "/api/pwa/tasks/",
+            data='{"title": "Ligar pro colégio", "context": "theo"}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertTrue(Task.objects.filter(title="Ligar pro colégio", context="theo").exists())
+
 
 @override_settings()
 class HealthApiTests(TestCase):

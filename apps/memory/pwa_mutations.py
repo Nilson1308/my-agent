@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from django.utils import timezone
 
-from apps.memory.models import Event, ShoppingItem, Task, TaskStatus
+from apps.memory.models import DomainContext, Event, ShoppingItem, Task, TaskStatus
+
+_VALID_CONTEXTS = {c.value for c in DomainContext}
 
 
 class PwaMutationError(Exception):
@@ -45,6 +47,36 @@ def pwa_complete_task(task_id: int) -> dict:
         "title": task.title,
         "status": task.status,
         "completed_at": timezone.localtime(now).isoformat(),
+    }
+
+
+def pwa_create_shopping(name: str, quantity: str = "") -> dict:
+    cleaned = name.strip()
+    if not cleaned:
+        raise PwaMutationError("invalid", "Nome do item obrigatório.")
+    if len(cleaned) > 255:
+        raise PwaMutationError("invalid", "Nome muito longo.")
+    qty = quantity.strip()[:64]
+    if ShoppingItem.objects.filter(is_bought=False, name__iexact=cleaned).exists():
+        raise PwaMutationError("duplicate", "Esse item já está na lista.")
+    item = ShoppingItem.objects.create(name=cleaned, quantity=qty)
+    return {"id": item.pk, "name": item.name, "quantity": item.quantity or ""}
+
+
+def pwa_create_task(title: str, context: str | None = None) -> dict:
+    cleaned = title.strip()
+    if not cleaned:
+        raise PwaMutationError("invalid", "Título da tarefa obrigatório.")
+    if len(cleaned) > 512:
+        raise PwaMutationError("invalid", "Título muito longo.")
+    ctx = (context or DomainContext.PESSOAL).strip().lower()
+    if ctx not in _VALID_CONTEXTS:
+        ctx = DomainContext.PESSOAL
+    task = Task.objects.create(title=cleaned, context=ctx)
+    return {
+        "id": task.pk,
+        "title": task.title,
+        "context": task.context,
     }
 
 

@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from "vue";
 import {
   completeTask,
+  createShoppingItem,
+  createTask,
   dismissEvent,
   markShoppingBought,
   unmarkShoppingBought,
@@ -27,6 +29,55 @@ const authenticated = ref(false);
 const busyShopping = ref<Set<number>>(new Set());
 const busyTasks = ref<Set<number>>(new Set());
 const busyEvents = ref<Set<number>>(new Set());
+
+const addOpen = ref(false);
+const addKind = ref<"shopping" | "task">("shopping");
+const addName = ref("");
+const addExtra = ref("");
+const addContext = ref("pessoal");
+const addSaving = ref(false);
+
+const contextOptions = [
+  { value: "pessoal", label: "Pessoal" },
+  { value: "casa", label: "Casa" },
+  { value: "theo", label: "Theo" },
+  { value: "trabalho", label: "Trabalho" },
+];
+
+function openAdd(kind: "shopping" | "task") {
+  addKind.value = kind;
+  addName.value = "";
+  addExtra.value = "";
+  addContext.value = "pessoal";
+  addOpen.value = true;
+}
+
+function openFab() {
+  openAdd(tab.value === "today" ? "task" : "shopping");
+}
+
+async function submitAdd() {
+  const name = addName.value.trim();
+  if (!name || addSaving.value) return;
+  addSaving.value = true;
+  error.value = "";
+  try {
+    if (addKind.value === "shopping") {
+      await createShoppingItem(name, addExtra.value);
+      tab.value = "shopping";
+    } else {
+      await createTask(name, addContext.value);
+      tab.value = "today";
+    }
+    addOpen.value = false;
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(8);
+    await load();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao salvar";
+  } finally {
+    addSaving.value = false;
+  }
+}
 
 const generatedLabel = computed(() =>
   snapshot.value ? formatGeneratedAt(snapshot.value.generated_at) : ""
@@ -141,7 +192,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
+  <div
+    class="relative mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-24 pt-[max(1rem,env(safe-area-inset-top))]"
+  >
     <header class="mb-6 flex items-start justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight text-slate-50">My Agent</h1>
@@ -342,6 +395,90 @@ onMounted(() => {
           <p v-else class="text-sm text-slate-500">Nada na agenda hoje.</p>
         </div>
       </section>
+
+      <button
+        type="button"
+        class="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-sky-600 text-2xl font-light text-white shadow-lg shadow-sky-900/50 active:bg-sky-700"
+        aria-label="Adicionar item ou tarefa"
+        @click="openFab"
+      >
+        +
+      </button>
+
+      <div
+        v-if="addOpen"
+        class="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4"
+        @click.self="addOpen = false"
+      >
+        <div
+          class="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
+        >
+          <div class="mb-4 flex gap-2">
+            <button
+              type="button"
+              class="flex-1 rounded-lg py-2 text-sm"
+              :class="
+                addKind === 'shopping'
+                  ? 'bg-sky-700 text-white'
+                  : 'bg-slate-800 text-slate-400'
+              "
+              @click="addKind = 'shopping'"
+            >
+              Mercado
+            </button>
+            <button
+              type="button"
+              class="flex-1 rounded-lg py-2 text-sm"
+              :class="
+                addKind === 'task' ? 'bg-emerald-800 text-white' : 'bg-slate-800 text-slate-400'
+              "
+              @click="addKind = 'task'"
+            >
+              Tarefa
+            </button>
+          </div>
+          <input
+            v-model="addName"
+            type="text"
+            :placeholder="addKind === 'shopping' ? 'Nome do item' : 'Título da tarefa'"
+            class="mb-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-sky-500"
+            @keyup.enter="submitAdd"
+          />
+          <input
+            v-if="addKind === 'shopping'"
+            v-model="addExtra"
+            type="text"
+            placeholder="Quantidade (opcional)"
+            class="mb-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-sky-500"
+          />
+          <select
+            v-else
+            v-model="addContext"
+            class="mb-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none"
+          >
+            <option v-for="c in contextOptions" :key="c.value" :value="c.value">
+              {{ c.label }}
+            </option>
+          </select>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="flex-1 rounded-xl border border-slate-600 py-3 text-sm text-slate-300"
+              @click="addOpen = false"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="flex-1 rounded-xl bg-sky-600 py-3 text-sm font-medium text-white disabled:opacity-50"
+              :disabled="addSaving || !addName.trim()"
+              @click="submitAdd"
+            >
+              {{ addSaving ? "Salvando…" : "Salvar" }}
+            </button>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>

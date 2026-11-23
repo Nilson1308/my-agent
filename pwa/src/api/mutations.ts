@@ -54,6 +54,39 @@ export async function completeTask(taskId: number): Promise<void> {
   if (!res.ok) throw new Error(await parseError(res));
 }
 
+export async function createShoppingItem(
+  name: string,
+  quantity = ""
+): Promise<void> {
+  const base = apiBase();
+  const res = await fetch(`${base}/api/pwa/shopping/`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...pwaAuthHeaders(),
+    },
+    body: JSON.stringify({ name: name.trim(), quantity: quantity.trim() }),
+  });
+  if (res.status === 401) throw new Error("Token inválido ou ausente.");
+  if (!res.ok) throw new Error(await parseError(res));
+}
+
+export async function createTask(title: string, context: string): Promise<void> {
+  const base = apiBase();
+  const res = await fetch(`${base}/api/pwa/tasks/`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...pwaAuthHeaders(),
+    },
+    body: JSON.stringify({ title: title.trim(), context }),
+  });
+  if (res.status === 401) throw new Error("Token inválido ou ausente.");
+  if (!res.ok) throw new Error(await parseError(res));
+}
+
 export async function dismissEvent(eventId: number): Promise<void> {
   const base = apiBase();
   const res = await fetch(`${base}/api/pwa/events/${eventId}/`, {
