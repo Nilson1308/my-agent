@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, time, timedelta
+
 from django.utils import timezone
 
 from apps.memory.models import DomainContext, Event, ShoppingItem, Task, TaskStatus
@@ -95,6 +97,35 @@ def pwa_create_task(title: str, context: str | None = None) -> dict:
         "id": task.pk,
         "title": task.title,
         "context": task.context,
+    }
+
+
+def pwa_snooze_event(
+    event_id: int,
+    *,
+    minutes: int | None = None,
+    tomorrow_morning: bool = False,
+) -> dict:
+    event = Event.objects.filter(pk=event_id).first()
+    if not event:
+        raise PwaMutationError("not_found", "Compromisso não encontrado.")
+    now = timezone.now()
+    if tomorrow_morning:
+        local = timezone.localtime(event.start_at)
+        next_day = local.date() + timedelta(days=1)
+        event.start_at = timezone.make_aware(
+            datetime.combine(next_day, time(9, 0)),
+            timezone.get_current_timezone(),
+        )
+    else:
+        delta = timedelta(minutes=minutes if minutes is not None else 15)
+        base = event.start_at if event.start_at > now else now
+        event.start_at = base + delta
+    event.save(update_fields=["start_at"])
+    return {
+        "id": event.pk,
+        "title": event.title,
+        "start_at": timezone.localtime(event.start_at).isoformat(),
     }
 
 

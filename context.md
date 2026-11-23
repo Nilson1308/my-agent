@@ -41,7 +41,7 @@ Toda mensagem (texto ou áudio transcrito) pode conter **uma ou múltiplas inten
 5. `apps/memory/services.execute_agent_plan` persiste no PostgreSQL.
 6. Roadmap de UX/interação: `docs/ROADMAP_UX.md` (Ondas 1–2 no bot; Onda 3 planejada).
 7. Onda 2–3: comandos Telegram + API `GET /api/pwa/snapshot/`.
-8. PWA: `pwa/` em `/app/` — `docs/PWA_STACK.md`, evoluções `docs/ROADMAP_PWA_ONDA4.md`.
+8. PWA: `pwa/` em `/app/` — `docs/PWA_STACK.md`, `docs/ROADMAP_PWA_ONDA4.md`, work-agent `docs/WORK_AGENT.md`.
 8. **Event** = compromisso na agenda (`start_at`). **Reminder** = alerta agendado (Celery ~1 min).
 6. Resposta curta no Telegram; envio síncrono compartilhado em `apps/bot/telegram_client.py`.
 

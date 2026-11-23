@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Gera um token seguro para PWA_API_TOKEN (cole no .env e na tela /app/)."
+    help = "Gera token PWA_API_TOKEN. Na rotação, mova o atual para PWA_API_TOKEN_PREVIOUS antes de trocar."
 
     def handle(self, *args, **options) -> None:
         token = secrets.token_urlsafe(32)

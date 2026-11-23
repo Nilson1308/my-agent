@@ -4,6 +4,8 @@ from apps.memory.models import (
     Event,
     InteractionLog,
     Note,
+    PwaMutationLog,
+    PwaPushSubscription,
     Reminder,
     ShoppingItem,
     Task,
@@ -59,6 +61,22 @@ class NoteAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Embedding")
     def has_embedding(self, obj: Note) -> bool:
         return obj.embedding is not None
+
+
+@admin.register(PwaPushSubscription)
+class PwaPushSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("endpoint", "active", "created_at")
+    list_filter = ("active",)
+    search_fields = ("endpoint",)
+    readonly_fields = ("created_at",)
+
+
+@admin.register(PwaMutationLog)
+class PwaMutationLogAdmin(admin.ModelAdmin):
+    list_display = ("action", "target_type", "target_id", "client_ip", "created_at")
+    list_filter = ("action", "target_type", "created_at")
+    search_fields = ("action", "client_ip")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(UserPreferences)

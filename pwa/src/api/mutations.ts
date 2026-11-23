@@ -97,6 +97,24 @@ export async function createTask(title: string, context: string): Promise<void> 
   if (!res.ok) throw new Error(await parseError(res));
 }
 
+export async function snoozeEvent(
+  eventId: number,
+  opts: { minutes?: number; preset?: "tomorrow_morning" }
+): Promise<void> {
+  const base = apiBase();
+  const res = await fetch(`${base}/api/pwa/events/${eventId}/snooze/`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...pwaAuthHeaders(),
+    },
+    body: JSON.stringify(opts),
+  });
+  if (res.status === 401) throw new Error("Token inválido ou ausente.");
+  if (!res.ok) throw new Error(await parseError(res));
+}
+
 export async function dismissEvent(eventId: number): Promise<void> {
   const base = apiBase();
   const res = await fetch(`${base}/api/pwa/events/${eventId}/`, {

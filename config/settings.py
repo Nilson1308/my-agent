@@ -143,6 +143,13 @@ GROQ_LLM_MODEL = os.getenv("GROQ_LLM_MODEL", "openai/gpt-oss-120b")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 GEOFENCE_WEBHOOK_TOKEN = os.getenv("GEOFENCE_WEBHOOK_TOKEN", "")
 PWA_API_TOKEN = os.getenv("PWA_API_TOKEN", "").strip()
+PWA_API_TOKEN_PREVIOUS = os.getenv("PWA_API_TOKEN_PREVIOUS", "").strip()
+PWA_PAIRING_TTL_SECONDS = int(os.getenv("PWA_PAIRING_TTL_SECONDS", "900"))
+PWA_PUBLIC_BASE_URL = os.getenv("PWA_PUBLIC_BASE_URL", "").strip().rstrip("/")
+PWA_WRITE_RATE_LIMIT_PER_MINUTE = int(os.getenv("PWA_WRITE_RATE_LIMIT_PER_MINUTE", "60"))
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL", "mailto:admin@localhost").strip()
 GEOFENCE_RATE_LIMIT_SECONDS = int(os.getenv("GEOFENCE_RATE_LIMIT_SECONDS", "120"))
 
 # Lembrete de compromisso: ~EVENT_REMINDER_MINUTES_BEFORE (janela ± EVENT_REMINDER_WINDOW_MINUTES).

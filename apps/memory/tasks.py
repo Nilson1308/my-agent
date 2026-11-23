@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.bot.notifier import send_telegram_message
 from apps.memory.models import DomainContext, Event, Reminder, Task, TaskStatus
+from apps.memory.pwa_push import push_for_telegram_text
 from apps.memory.services import format_active_shopping_list
 
 
@@ -117,7 +118,9 @@ def check_upcoming_events() -> dict[str, object]:
             f"⏰ Em ~{minutes} min: {event.title}\n"
             f"[{event.context}] · {local_start:%d/%m às %H:%M}"
         )
-        if send_telegram_message(text):
+        sent_tg = send_telegram_message(text)
+        push_for_telegram_text(text, tag="my-agent-event")
+        if sent_tg:
             event.reminded = True
             event.save(update_fields=["reminded"])
             reminded_count += 1
@@ -140,7 +143,9 @@ def check_scheduled_reminders() -> dict[str, object]:
         )
         if reminder.message and reminder.message != reminder.title:
             text += f"\n{reminder.message}"
-        if send_telegram_message(text):
+        sent_tg = send_telegram_message(text)
+        push_for_telegram_text(text, tag="my-agent-reminder")
+        if sent_tg:
             reminder.reminded = True
             reminder.save(update_fields=["reminded"])
             sent += 1

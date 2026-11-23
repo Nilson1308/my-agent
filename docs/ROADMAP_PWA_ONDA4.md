@@ -22,43 +22,44 @@ Superfície **`/app/`** evoluindo de leitora para **painel tátil** do my-agent,
 - `PATCH .../tasks/{id}/` body `{"status": "pending"}` (reabrir) ou `"done"`  
 - Snapshot: `tasks_done_recent` (7 dias) + **Reabrir** na aba Hoje  
 
-## 4.4 Compromissos avançados
+## 4.4 Compromissos avançados ✅ implementado
 
-- Snooze: `POST .../events/{id}/snooze/` (+15 min / amanhã)  
-- Ou campo `Event.dismissed_at` em vez de delete (auditoria)  
+- Snooze: `POST .../events/{id}/snooze/`  
+- UI: **+15 min** / **Amanhã 9h**  
 
-## 4.5 Offline e sync
+## 4.5 Offline e sync ⏸️ adiado
 
-- IndexedDB: último snapshot + fila de PATCH  
-- Background Sync (Workbox) quando voltar online  
-- Badge “offline · pendências na fila”  
+- IndexedDB + fila + Workbox Background Sync  
 
-## 4.6 Proatividade no dispositivo
+## 4.6 Proatividade no dispositivo ✅ implementado
 
-- Web Push (VAPID) para lembrete/compromisso — espelhar Celery  
-- Opcional: notificação “geofence” via PWA se permissão  
+- Web Push (VAPID): `GET /api/pwa/push/vapid/`, `POST .../subscribe/` / `unsubscribe/`  
+- Celery `check_scheduled_reminders` e `check_upcoming_events` espelham texto no push  
+- UI: botão **Notificações** no PWA; `sw-push.js` no service worker  
+- Setup: `python manage.py generate_vapid_keys` → `VAPID_*` no `.env`  
+- Geofence via push: 🔜 (opcional)  
 
-## 4.7 Segurança e onboarding
+## 4.7 Segurança e onboarding ✅ implementado
 
-- Rate limit por IP no namespace `/api/pwa/*`  
-- Página “pairing”: QR com token de uso único gerado no admin  
-- Rotação `PWA_API_TOKEN` sem downtime (dois tokens válidos)  
+- Rate limit escritas PWA (Redis)  
+- **Dual token:** `PWA_API_TOKEN` + `PWA_API_TOKEN_PREVIOUS` (rotação sem downtime)  
+- **Pairing:** `POST /api/pwa/pairing/create/` (autenticado) → QR / URL `?code=`  
+- `POST /api/pwa/pairing/exchange/` (público, one-shot) → token de sessão  
+- CLI: `python manage.py generate_pwa_pairing`  
 
-## 4.8 UX polish
+## 4.8 UX polish ✅ implementado
 
-- Pull-to-refresh, loading skeletons, toast de sucesso  
-- `navigator.vibrate` no ✓ (Android)  
-- Tema claro / `prefers-color-scheme`  
+- Pull-to-refresh, skeleton, toast, tema claro, vibrate  
 
-## 4.9 Observabilidade
+## 4.9 Observabilidade ✅ implementado
 
-- `PwaMutationLog` (item, ação, ip, timestamp) — debug e métricas  
-- Dashboard admin: uso PWA vs Telegram  
+- `PwaMutationLog` + admin  
+- Dashboard PWA vs Telegram — 🔜  
 
-## 4.10 work-agent
+## 4.10 work-agent ✅ documentado
 
-- Reusar stack; JWT; entidades Meeting/ActionItem — não misturar DB com my-agent  
+- `docs/WORK_AGENT.md` + `work-agent/CONTEXT.md` — sem código compartilhado no DB  
 
 ---
 
-**Ordem sugerida:** 4.1 → 4.2 → 4.3 → 4.5 → 4.6 → 4.8 → 4.4/4.6 push.
+**Restante opcional:** 4.5 offline · dashboard 4.9 · push geofence.

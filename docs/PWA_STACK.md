@@ -6,8 +6,8 @@ Decisões fixas (Nov/2025):
 |--------|---------|
 | Hosting | `https://copa…/app/` |
 | Stack | Vue 3 + Vite 6 + Tailwind 4 + vite-plugin-pwa |
-| Auth | `PWA_API_TOKEN` em `sessionStorage` → header `X-PWA-Token` |
-| Escopo v0 | Somente leitura (`GET /api/pwa/snapshot/`) |
+| Auth | `PWA_API_TOKEN` (+ opcional `PREVIOUS`); pairing `?code=`; header `X-PWA-Token` |
+| Push | VAPID + `PwaPushSubscription` (lembretes Celery) |
 | Nome na UI | **My Agent** |
 | API write | Fase seguinte (PATCH mercado, etc.) |
 

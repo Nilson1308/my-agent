@@ -98,8 +98,10 @@ curl -sS https://copa.mogidascruzes.sp.gov.br/api/health/
 1. Defina `PWA_API_TOKEN` no `.env` (mesmo valor que o usuário cola no app).
 2. Build: `./deploy/build-pwa.sh` (Node 20+ no host).
 3. Vhost COPA: `deploy/apache/copa.mogidascruzes.sp.gov.br.conf` — `Alias /app` + `ProxyPass /app !`.
-4. Módulos: `sudo a2enmod proxy proxy_http headers alias rewrite`
-5. Abra `https://copa.mogidascruzes.sp.gov.br/app/` e informe o token.
+4. Sincronizar: `./deploy/sync-apache-copa.sh` (ou `sudo systemctl reload apache2` após copiar o conf).
+5. Se o Apache não recarregar (ex.: `default-ssl.conf` inválido), o Gunicorn ainda serve `/app/` via `apps.core.pwa_static` — rode `./deploy/build-pwa.sh` antes do deploy.
+6. Módulos: `sudo a2enmod proxy proxy_http headers alias rewrite`
+7. Abra `https://copa.mogidascruzes.sp.gov.br/app/` e informe o token.
 
 Ver `docs/PWA_STACK.md` e `pwa/README.md`.
 

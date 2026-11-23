@@ -1,6 +1,6 @@
 # Ponte PWA ↔ my-agent (Onda 3)
 
-PWA em **`/app/`** (código em `my-agent/pwa/`). API read-only; `work-agent` reusará o padrão com JWT.
+PWA em **`/app/`** (código em `my-agent/pwa/`). Leitura + escrita tátil; `work-agent` ver `docs/WORK_AGENT.md`.
 
 ## Endpoint
 
@@ -21,6 +21,19 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). API read-only; `work-agent` reu
 - `POST /api/pwa/tasks/` — `{"title", "context"?}`
 - `PATCH /api/pwa/tasks/{id}/` — `{"status": "pending"}` reabre; `"done"` conclui
 - Snapshot: `tasks_done_recent`
+- Snooze: `POST /api/pwa/events/{id}/snooze/`
+
+**Web Push (4.6):**
+
+- `GET /api/pwa/push/vapid/` — `public_key`, `enabled` (sem auth)
+- `POST /api/pwa/push/subscribe/` — body Web Push `endpoint` + `keys`
+- `POST /api/pwa/push/unsubscribe/`
+
+**Pairing / rotação (4.7):**
+
+- Auth aceita `PWA_API_TOKEN` ou `PWA_API_TOKEN_PREVIOUS`
+- `POST /api/pwa/pairing/create/` (com token) → `pair_url`, `code`, `expires_in`
+- `POST /api/pwa/pairing/exchange/` — `{"code"}` → `{"token"}` (uso único, Redis)
 
 **Erros:**
 
@@ -34,6 +47,6 @@ curl -sS -H "X-PWA-Token: $PWA_API_TOKEN" \
   https://copa.mogidascruzes.sp.gov.br/api/pwa/snapshot/
 ```
 
-## Próximo passo (work-agent)
+## work-agent
 
-O produto profissional em `work-agent/CONTEXT.md` reutiliza esta ideia com auth JWT e entidades `Meeting`/`ActionItem`; o my-agent permanece como backend pessoal até o split de apps.
+Ver `docs/WORK_AGENT.md` e `work-agent/CONTEXT.md` (JWT, DB isolado).

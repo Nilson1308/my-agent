@@ -23,7 +23,11 @@ Saída em `pwa/dist/`. O Apache serve esse diretório em `/app/` (ver `deploy/ap
 
 ## Token
 
-Mesmo valor que `PWA_API_TOKEN` no `.env` do backend. Armazenado em `sessionStorage` (sessão do navegador).
+- Token manual: `PWA_API_TOKEN` no `.env` (também aceita `PWA_API_TOKEN_PREVIOUS` na rotação).
+- Pairing: link `?code=…` ou QR (**QR aparelho** no app / `python manage.py generate_pwa_pairing`).
+- Armazenado em `sessionStorage` (sessão do navegador).
+
+**Web Push:** defina `VAPID_*` no servidor (`python manage.py generate_vapid_keys`) e toque **Notificações** no app.
 
 ## Instalar no celular
 

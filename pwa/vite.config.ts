@@ -13,6 +13,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
+        importScripts: [`${base}sw-push.js`],
         navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [

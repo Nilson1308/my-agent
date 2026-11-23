@@ -6,9 +6,12 @@ import {
   createTask,
   reopenTask,
   dismissEvent,
+  snoozeEvent,
   markShoppingBought,
   unmarkShoppingBought,
 } from "./api/mutations";
+import { usePullRefresh } from "./composables/usePullRefresh";
+import { useToast } from "./composables/useToast";
 import {
   fetchSnapshot,
   formatDate,
@@ -16,7 +19,9 @@ import {
   formatTime,
   type PwaSnapshot,
 } from "./api/snapshot";
+import { createPairingLink, exchangePairingCode } from "./api/pairing";
 import { clearPwaToken, getPwaToken, setPwaToken } from "./auth";
+import { subscribeMyAgentPush } from "./push";
 
 type Tab = "home" | "shopping" | "today";
 
@@ -37,6 +42,13 @@ const addName = ref("");
 const addExtra = ref("");
 const addContext = ref("pessoal");
 const addSaving = ref(false);
+
+const pushMsg = ref("");
+const pairingOpen = ref(false);
+const pairingUrl = ref("");
+const pairingBusy = ref(false);
+
+const { toastMessage, showToast } = useToast();
 
 const contextOptions = [
   { value: "pessoal", label: "Pessoal" },
@@ -72,6 +84,7 @@ async function submitAdd() {
     }
     addOpen.value = false;
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(8);
+    showToast(addKind.value === "shopping" ? "Item adicionado" : "Tarefa criada");
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao salvar";
@@ -110,6 +123,8 @@ async function load() {
   }
 }
 
+const { pullY } = usePullRefresh(load, { disabled: loading });
+
 function submitLogin() {
   setPwaToken(loginToken.value);
   loginToken.value = "";
@@ -129,6 +144,7 @@ async function toggleBought(itemId: number) {
   try {
     await markShoppingBought(itemId);
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
+    showToast("Marcado como comprado");
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao marcar item";
@@ -143,6 +159,7 @@ async function undoBought(itemId: number) {
   error.value = "";
   try {
     await unmarkShoppingBought(itemId);
+    showToast("Compra desfeita");
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao desfazer";
@@ -158,6 +175,7 @@ async function markEventDone(eventId: number) {
   try {
     await dismissEvent(eventId);
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
+    showToast("Compromisso encerrado");
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao encerrar compromisso";
@@ -173,6 +191,7 @@ async function toggleTaskDone(taskId: number) {
   try {
     await completeTask(taskId);
     if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
+    showToast("Tarefa concluída");
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao concluir tarefa";
@@ -187,6 +206,7 @@ async function undoTaskDone(taskId: number) {
   error.value = "";
   try {
     await reopenTask(taskId);
+    showToast("Tarefa reaberta");
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao reabrir tarefa";
@@ -202,15 +222,91 @@ function doneWhenLabel(iso: string | null): string {
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+async function snoozeEventMinutes(eventId: number, minutes: number) {
+  if (busyEvents.value.has(eventId)) return;
+  busyEvents.value.add(eventId);
+  error.value = "";
+  try {
+    await snoozeEvent(eventId, { minutes });
+    showToast(minutes === 15 ? "Adiado 15 min" : `Adiado ${minutes} min`);
+    await load();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao adiar";
+  } finally {
+    busyEvents.value.delete(eventId);
+  }
+}
+
+async function snoozeEventTomorrow(eventId: number) {
+  if (busyEvents.value.has(eventId)) return;
+  busyEvents.value.add(eventId);
+  error.value = "";
+  try {
+    await snoozeEvent(eventId, { preset: "tomorrow_morning" });
+    showToast("Amanhã às 9h");
+    await load();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao adiar";
+  } finally {
+    busyEvents.value.delete(eventId);
+  }
+}
+
 function taskDueLabel(task: PwaSnapshot["tasks_pending"][0]): string {
   if (task.due_at) return formatTime(task.due_at);
   if (task.due_date) return formatDate(task.due_date);
   return "";
 }
 
-onMounted(() => {
+async function tryPairingFromUrl() {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code")?.trim();
+  if (!code) return false;
+  error.value = "";
+  try {
+    const token = await exchangePairingCode(code);
+    setPwaToken(token);
+    params.delete("code");
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+    window.history.replaceState({}, "", next);
+    showToast("Aparelho conectado");
+    return true;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Pairing falhou";
+    return false;
+  }
+}
+
+async function enablePush() {
+  pushMsg.value = "";
+  try {
+    pushMsg.value = await subscribeMyAgentPush();
+    showToast("Notificações ativadas");
+  } catch (e) {
+    pushMsg.value = e instanceof Error ? e.message : "Erro ao ativar push";
+  }
+}
+
+async function openPairingQr() {
+  if (pairingBusy.value) return;
+  pairingBusy.value = true;
+  pairingUrl.value = "";
+  try {
+    const data = await createPairingLink();
+    pairingUrl.value = data.pair_url;
+    pairingOpen.value = true;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao criar pairing";
+  } finally {
+    pairingBusy.value = false;
+  }
+}
+
+onMounted(async () => {
+  const paired = await tryPairingFromUrl();
   ensureAuth();
-  if (authenticated.value) load();
+  if (paired || authenticated.value) await load();
 });
 </script>
 
@@ -218,6 +314,22 @@ onMounted(() => {
   <div
     class="relative mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-24 pt-[max(1rem,env(safe-area-inset-top))]"
   >
+    <div
+      v-if="authenticated && pullY > 0"
+      class="pointer-events-none fixed left-0 right-0 top-0 z-50 flex justify-center pt-[max(0.5rem,env(safe-area-inset-top))]"
+      :style="{ opacity: Math.min(1, pullY / 72) }"
+    >
+      <span class="rounded-full bg-slate-800/90 px-3 py-1 text-xs text-slate-200">
+        {{ pullY >= 72 ? "Solte para atualizar" : "Puxe para atualizar" }}
+      </span>
+    </div>
+    <div
+      v-if="toastMessage"
+      class="fixed left-1/2 top-[max(3rem,env(safe-area-inset-top))] z-50 -translate-x-1/2 rounded-xl bg-slate-800 px-4 py-2 text-sm text-white shadow-lg"
+      role="status"
+    >
+      {{ toastMessage }}
+    </div>
     <header class="mb-6 flex items-start justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight text-slate-50">My Agent</h1>
@@ -239,8 +351,8 @@ onMounted(() => {
     >
       <h2 class="mb-2 text-lg font-medium">Token de acesso</h2>
       <p class="mb-4 text-sm text-slate-400">
-        Cole o mesmo valor de <code class="text-slate-300">PWA_API_TOKEN</code> do servidor (como no app GF).
-        Fica salvo só nesta sessão do navegador.
+        Cole o <code class="text-slate-300">PWA_API_TOKEN</code>, escaneie um QR de pairing ou abra um link
+        <code class="text-slate-300">?code=…</code> gerado no servidor. Só nesta sessão do navegador.
       </p>
       <input
         v-model="loginToken"
@@ -277,23 +389,52 @@ onMounted(() => {
         </button>
       </nav>
 
-      <div class="mb-4 flex items-center justify-between gap-2 text-xs text-slate-500">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <span v-if="generatedLabel">Atualizado: {{ generatedLabel }}</span>
-        <button
-          type="button"
-          class="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 disabled:opacity-50"
-          :disabled="loading"
-          @click="load"
-        >
-          {{ loading ? "..." : "Atualizar" }}
-        </button>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 disabled:opacity-50"
+            :disabled="loading"
+            @click="load"
+          >
+            {{ loading ? "..." : "Atualizar" }}
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border border-sky-800/60 px-3 py-1.5 text-sky-300"
+            @click="enablePush"
+          >
+            Notificações
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 disabled:opacity-40"
+            :disabled="pairingBusy"
+            @click="openPairingQr"
+          >
+            QR aparelho
+          </button>
+        </div>
       </div>
+      <p v-if="pushMsg" class="mb-3 text-xs text-sky-300">{{ pushMsg }}</p>
 
       <p v-if="error" class="mb-4 rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
         {{ error }}
       </p>
 
-      <section v-if="tab === 'home' && snapshot" class="space-y-4">
+      <section
+        v-if="loading && !snapshot"
+        class="animate-pulse space-y-4"
+        aria-busy="true"
+        aria-label="Carregando"
+      >
+        <div class="h-24 rounded-2xl bg-slate-800/60" />
+        <div class="h-24 rounded-2xl bg-slate-800/60" />
+        <div class="h-24 rounded-2xl bg-slate-800/60" />
+      </section>
+
+      <section v-else-if="tab === 'home' && snapshot" class="space-y-4">
         <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 class="mb-2 font-medium text-slate-200">Mercado</h3>
           <p class="text-3xl font-semibold text-sky-400">{{ snapshot.shopping.count }}</p>
@@ -440,6 +581,24 @@ onMounted(() => {
                 <span class="text-slate-400">[{{ ev.context }}]</span>
                 {{ ev.title }}
                 <span class="text-slate-500"> · {{ formatTime(ev.start_at) }}</span>
+                <span class="mt-2 flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    class="rounded-md border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300 disabled:opacity-40"
+                    :disabled="busyEvents.has(ev.id)"
+                    @click="snoozeEventMinutes(ev.id, 15)"
+                  >
+                    +15 min
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-md border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300 disabled:opacity-40"
+                    :disabled="busyEvents.has(ev.id)"
+                    @click="snoozeEventTomorrow(ev.id)"
+                  >
+                    Amanhã 9h
+                  </button>
+                </span>
               </span>
             </li>
           </ul>
@@ -455,6 +614,35 @@ onMounted(() => {
       >
         +
       </button>
+
+      <div
+        v-if="pairingOpen"
+        class="fixed inset-0 z-30 flex items-center justify-center bg-black/60 p-4"
+        @click.self="pairingOpen = false"
+      >
+        <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5 text-center shadow-xl">
+          <h3 class="mb-2 text-lg font-medium text-slate-100">Conectar outro aparelho</h3>
+          <p class="mb-4 text-xs text-slate-400">
+            Escaneie com a câmera do celular (código de uso único, ~15 min).
+          </p>
+          <img
+            v-if="pairingUrl"
+            class="mx-auto mb-3 rounded-lg bg-white p-2"
+            :src="`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairingUrl)}`"
+            width="220"
+            height="220"
+            alt="QR pairing"
+          />
+          <p v-if="pairingUrl" class="mb-4 break-all text-[10px] text-slate-500">{{ pairingUrl }}</p>
+          <button
+            type="button"
+            class="w-full rounded-xl border border-slate-600 py-2.5 text-sm text-slate-300"
+            @click="pairingOpen = false"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
 
       <div
         v-if="addOpen"

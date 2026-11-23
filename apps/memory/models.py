@@ -100,6 +100,36 @@ class Reminder(models.Model):
         return f"{self.title} @ {self.remind_at:%d/%m %H:%M}"
 
 
+class PwaPushSubscription(models.Model):
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    user_agent = models.CharField(max_length=255, blank=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "subscrição push PWA"
+        verbose_name_plural = "subscrições push PWA"
+
+    def __str__(self) -> str:
+        return self.endpoint[:64]
+
+
+class PwaMutationLog(models.Model):
+    action = models.CharField(max_length=64, db_index=True)
+    target_type = models.CharField(max_length=32, blank=True)
+    target_id = models.BigIntegerField(null=True, blank=True)
+    client_ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "log mutação PWA"
+        verbose_name_plural = "logs mutações PWA"
+
+
 class UserPreferences(models.Model):
     telegram_user_id = models.BigIntegerField(unique=True, db_index=True)
     default_context = models.CharField(
