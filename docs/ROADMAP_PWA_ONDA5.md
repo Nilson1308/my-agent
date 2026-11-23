@@ -29,8 +29,12 @@ Mesmo **cérebro** (`run_agent_message`) nos dois canais; Telegram **não** é d
 - Limites: `PWA_PDF_MAX_BYTES`, `PWA_PDF_MAX_CHUNKS`
 - PWA: **Enviar PDF** na aba Chat; consulta via `search_notes` no chat
 
-## 5.5 Foto + vision (limite diário) 🔜
+## 5.5 Foto + vision (limite diário) ✅
+
+- `POST /api/pwa/documents/image/` — vision Groq (`GROQ_VISION_MODEL`) → notas + embedding
+- Limite: `PWA_VISION_MAX_PER_DAY` (Redis), `PWA_IMAGE_MAX_BYTES`
+- PWA: **Foto / OCR** na aba Chat (câmera ou galeria)
 
 ---
 
-**Ordem restante:** 5.5
+**Onda 5 concluída** (próximas ideias: confirmação duplicata no PWA, offline 4.5).

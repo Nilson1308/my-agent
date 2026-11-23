@@ -338,6 +338,28 @@ class PwaApiTests(TestCase):
         self.assertGreater(body["chunks"], 0)
         self.assertTrue(Note.objects.filter(pk__in=body["note_ids"]).exists())
 
+    @patch("apps.memory.image_ingest.describe_image_bytes", return_value="Texto lido na foto sobre compras.")
+    def test_pwa_image_ingest(self, _vision) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.memory.models import Note
+
+        client = Client()
+        upload = SimpleUploadedFile(
+            "scan.jpg",
+            b"\xff\xd8\xff fakejpeg",
+            content_type="image/jpeg",
+        )
+        r = client.post(
+            "/api/pwa/documents/image/",
+            data={"context": "casa", "file": upload},
+            HTTP_X_PWA_TOKEN="test-pwa-token",
+        )
+        self.assertEqual(r.status_code, 200, msg=r.content.decode()[:500])
+        body = r.json()
+        self.assertGreater(body["chunks"], 0)
+        self.assertTrue(Note.objects.filter(content__contains="📷").exists())
+
     def test_pwa_geofence_events_list(self) -> None:
         GeofenceEvent.objects.create(
             location_label="casa",

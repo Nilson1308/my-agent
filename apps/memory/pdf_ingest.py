@@ -81,6 +81,56 @@ def _safe_filename(name: str) -> str:
     return base or "documento.pdf"
 
 
+def _resolve_context(context: str | None) -> str:
+    ctx = (context or DomainContext.PESSOAL).strip().lower()
+    if ctx not in {c.value for c in DomainContext}:
+        return DomainContext.PESSOAL
+    return ctx
+
+
+def ingest_text_as_notes(
+    text: str,
+    source_label: str,
+    *,
+    context: str | None = None,
+    max_chunks: int | None = None,
+    icon: str = "📎",
+) -> dict:
+    if not text.strip():
+        raise PdfIngestError("empty", "Nenhum texto para indexar.")
+    ctx = _resolve_context(context)
+    cap = max_chunks if max_chunks is not None else int(getattr(settings, "PWA_PDF_MAX_CHUNKS", 24))
+    chunks = chunk_text(text)
+    if not chunks:
+        raise PdfIngestError("empty", "Texto vazio após processamento.")
+    truncated = len(chunks) > cap
+    if truncated:
+        chunks = chunks[:cap]
+
+    note_ids: list[int] = []
+    for i, chunk in enumerate(chunks):
+        title = f"{icon} {source_label}"
+        if len(chunks) > 1:
+            title += f" ({i + 1}/{len(chunks)})"
+        content = f"{title}\n\n{chunk}"
+        embedding = None
+        try:
+            embedding = embed_document(chunk)
+        except Exception:
+            logger.exception("embedding chunk falhou (%s)", source_label)
+        note = Note.objects.create(content=content, context=ctx, embedding=embedding)
+        note_ids.append(note.pk)
+
+    return {
+        "filename": source_label,
+        "chunks": len(note_ids),
+        "chars": len(text),
+        "note_ids": note_ids,
+        "truncated": truncated,
+        "context": ctx,
+    }
+
+
 def ingest_pdf_bytes(
     data: bytes,
     filename: str,
@@ -96,39 +146,11 @@ def ingest_pdf_bytes(
     if not text.strip():
         raise PdfIngestError("empty", "Nenhum texto extraível (PDF escaneado precisa de OCR).")
 
-    ctx = (context or DomainContext.PESSOAL).strip().lower()
-    if ctx not in {c.value for c in DomainContext}:
-        ctx = DomainContext.PESSOAL
-
     safe_name = _safe_filename(filename)
-    chunks = chunk_text(text)
-    if not chunks:
-        raise PdfIngestError("empty", "Texto vazio após processamento.")
-    if len(chunks) > max_chunks:
-        chunks = chunks[:max_chunks]
-        truncated = True
-    else:
-        truncated = False
-
-    note_ids: list[int] = []
-    for i, chunk in enumerate(chunks):
-        title = f"📎 {safe_name}"
-        if len(chunks) > 1:
-            title += f" ({i + 1}/{len(chunks)})"
-        content = f"{title}\n\n{chunk}"
-        embedding = None
-        try:
-            embedding = embed_document(chunk)
-        except Exception:
-            logger.exception("embedding chunk PDF falhou")
-        note = Note.objects.create(content=content, context=ctx, embedding=embedding)
-        note_ids.append(note.pk)
-
-    return {
-        "filename": safe_name,
-        "chunks": len(note_ids),
-        "chars": len(text),
-        "note_ids": note_ids,
-        "truncated": truncated,
-        "context": ctx,
-    }
+    return ingest_text_as_notes(
+        text,
+        safe_name,
+        context=context,
+        max_chunks=max_chunks,
+        icon="📎",
+    )

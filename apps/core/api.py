@@ -21,6 +21,7 @@ from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
 from apps.core.geofence_log import record_geofence_event
 from apps.core.pwa_auth import configured_pwa_tokens, pwa_token_is_valid
 from apps.core.pwa_guard import enforce_pwa_write_rate_limit
+from apps.core.pwa_vision_guard import enforce_pwa_vision_daily_limit
 from apps.core.pwa_pairing import (
     create_pairing_code,
     issue_token_after_pairing,
@@ -41,6 +42,7 @@ from apps.memory.pwa_mutations import (
     pwa_snooze_event,
 )
 from apps.memory.agent_pipeline import run_agent_message
+from apps.memory.image_ingest import ingest_image_bytes
 from apps.memory.pdf_ingest import PdfIngestError, ingest_pdf_bytes
 from apps.memory.models import GeofenceEvent, InteractionChannel, InteractionLog
 from apps.memory.pwa_snapshot import build_pwa_snapshot
@@ -618,6 +620,37 @@ def pwa_pdf_ingest(request, file: UploadedFile = File(...)):
         logger.exception("pwa pdf ingest: %s", exc)
         raise HttpError(500, "Falha ao processar PDF.") from exc
     log_pwa_mutation(request, "pdf_ingest", target_type="note", target_id=result["note_ids"][0] if result["note_ids"] else None)
+    return PdfIngestOut(**result)
+
+
+@api.post(
+    "/pwa/documents/image/",
+    auth=pwa_token_auth,
+    response={200: PdfIngestOut, 400: dict, 429: dict, 503: dict},
+)
+def pwa_image_ingest(request, file: UploadedFile = File(...)):
+    if not configured_pwa_tokens():
+        raise HttpError(503, "PWA não configurado.")
+    enforce_pwa_write_rate_limit(request)
+    enforce_pwa_vision_daily_limit()
+    context = (request.POST.get("context") or "pessoal").strip()
+    name = file.name or "foto.jpg"
+    mime = file.content_type or "application/octet-stream"
+    try:
+        data = b"".join(file.chunks())
+        result = ingest_image_bytes(data, name, mime, context=context)
+    except PdfIngestError as exc:
+        code = 429 if exc.code == "rate_limit" else 400
+        raise HttpError(code, exc.message) from exc
+    except Exception as exc:
+        logger.exception("pwa image ingest: %s", exc)
+        raise HttpError(500, "Falha ao processar imagem.") from exc
+    log_pwa_mutation(
+        request,
+        "image_ingest",
+        target_type="note",
+        target_id=result["note_ids"][0] if result["note_ids"] else None,
+    )
     return PdfIngestOut(**result)
 
 

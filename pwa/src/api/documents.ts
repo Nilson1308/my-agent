@@ -7,7 +7,7 @@ function apiBase(): string {
   return "";
 }
 
-export type PdfIngestResult = {
+export type DocumentIngestResult = {
   filename: string;
   chunks: number;
   chars: number;
@@ -19,7 +19,7 @@ export type PdfIngestResult = {
 export async function uploadPdf(
   file: File,
   context = "pessoal"
-): Promise<PdfIngestResult> {
+): Promise<DocumentIngestResult> {
   const base = apiBase();
   const form = new FormData();
   form.append("file", file, file.name);
@@ -34,6 +34,31 @@ export async function uploadPdf(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail || "Falha ao enviar PDF.");
+  }
+  return res.json();
+}
+
+export async function uploadImage(
+  file: File,
+  context = "pessoal"
+): Promise<DocumentIngestResult> {
+  const base = apiBase();
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("context", context);
+  const res = await fetch(`${base}/api/pwa/documents/image/`, {
+    method: "POST",
+    headers: { Accept: "application/json", ...pwaAuthHeaders() },
+    body: form,
+  });
+  if (res.status === 401) throw new Error("Token inválido.");
+  if (res.status === 429) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Limite diário de fotos.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || "Falha ao enviar foto.");
   }
   return res.json();
 }

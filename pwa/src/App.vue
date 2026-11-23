@@ -22,7 +22,7 @@ import {
 import { createPairingLink, exchangePairingCode } from "./api/pairing";
 import { clearPwaToken, getPwaToken, setPwaToken } from "./auth";
 import { sendChatAudio, sendChatMessage } from "./api/chat";
-import { uploadPdf } from "./api/documents";
+import { uploadImage, uploadPdf } from "./api/documents";
 import GeofenceMap from "./components/GeofenceMap.vue";
 import { subscribeMyAgentPush } from "./push";
 
@@ -59,6 +59,7 @@ const chatBusy = ref(false);
 const recording = ref(false);
 const pdfContext = ref("pessoal");
 const pdfBusy = ref(false);
+const imageBusy = ref(false);
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 
@@ -344,6 +345,27 @@ async function toggleRecord() {
   }
 }
 
+async function onImageSelected(ev: Event) {
+  const input = ev.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || imageBusy.value) return;
+  imageBusy.value = true;
+  error.value = "";
+  try {
+    const res = await uploadImage(file, pdfContext.value);
+    const extra = res.truncated ? " (truncado)" : "";
+    const msg = `Foto “${res.filename}”: ${res.chunks} trecho(s) na memória${extra}. Use o chat para perguntar.`;
+    chatLines.value.push({ role: "assistant", text: msg });
+    showToast("Foto indexada");
+    if (tab.value !== "chat") tab.value = "chat";
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha na foto";
+  } finally {
+    imageBusy.value = false;
+  }
+}
+
 async function onPdfSelected(ev: Event) {
   const input = ev.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -563,6 +585,17 @@ onMounted(async () => {
           Mesmo assistente do Telegram: mercado, tarefas, agenda, notas e busca na memória.
         </p>
         <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <label class="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-slate-300">
+            {{ imageBusy ? "Foto…" : "Foto / OCR" }}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              capture="environment"
+              class="hidden"
+              :disabled="imageBusy"
+              @change="onImageSelected"
+            />
+          </label>
           <label class="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-slate-300">
             {{ pdfBusy ? "PDF…" : "Enviar PDF" }}
             <input
