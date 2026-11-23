@@ -6,6 +6,8 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). Leitura + escrita tátil; `work
 
 `GET /api/pwa/snapshot/`
 
+**Observabilidade (4.9):** `GET /api/pwa/observability/?days=7` — métricas PWA vs Telegram (mesmo header de token).
+
 **Header:** `X-PWA-Token: <PWA_API_TOKEN>` (mesmo valor do `.env`)
 
 **Resposta 200:** JSON com `shopping`, `tasks_pending`, `events_today`, `generated_at`.

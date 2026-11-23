@@ -114,7 +114,7 @@ class InteractionLogAdmin(admin.ModelAdmin):
         "created_at",
         "response_preview",
     )
-    list_filter = ("input_type", "llm_outcome", "created_at")
+    list_filter = ("channel", "input_type", "llm_outcome", "created_at")
     search_fields = ("raw_input", "bot_response")
     ordering = ("-created_at",)
     readonly_fields = ("created_at",)

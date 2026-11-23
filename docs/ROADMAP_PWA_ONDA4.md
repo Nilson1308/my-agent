@@ -53,8 +53,9 @@ Superfície **`/app/`** evoluindo de leitora para **painel tátil** do my-agent,
 
 ## 4.9 Observabilidade ✅ implementado
 
-- `PwaMutationLog` + admin  
-- Dashboard PWA vs Telegram — 🔜  
+- `PwaMutationLog` + admin (`InteractionLog` filtro por `channel`)  
+- `GET /api/pwa/observability/?days=7` — chat por canal, mutações, geofence, push, falhas Telegram  
+- PWA aba **Início**: card **PWA vs Telegram** (últimos 7 dias)  
 
 ## 4.10 work-agent ✅ documentado
 
@@ -62,6 +63,6 @@ Superfície **`/app/`** evoluindo de leitora para **painel tátil** do my-agent,
 
 ---
 
-**Restante opcional:** 4.5 offline · dashboard 4.9 · push geofence.
+**Restante opcional:** 4.5 offline · push geofence.
 
 **Onda 5 (chat/RAG/mapa):** ver `docs/ROADMAP_PWA_ONDA5.md`.

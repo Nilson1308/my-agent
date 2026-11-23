@@ -360,6 +360,33 @@ class PwaApiTests(TestCase):
         self.assertGreater(body["chunks"], 0)
         self.assertTrue(Note.objects.filter(content__contains="📷").exists())
 
+    def test_pwa_observability(self) -> None:
+        from apps.memory.models import InputType
+
+        InteractionLog.objects.create(
+            raw_input="oi",
+            input_type=InputType.TEXT,
+            channel=InteractionChannel.PWA,
+            llm_outcome=LLM_OK,
+        )
+        InteractionLog.objects.create(
+            raw_input="telegram",
+            input_type=InputType.TEXT,
+            channel=InteractionChannel.TELEGRAM,
+            llm_outcome=LLM_OK,
+        )
+        PwaMutationLog.objects.create(action="task_done", target_type="task", target_id=1)
+        r = Client().get(
+            "/api/pwa/observability/",
+            HTTP_X_PWA_TOKEN="test-pwa-token",
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["interactions"]["pwa"], 1)
+        self.assertEqual(body["interactions"]["telegram"], 1)
+        self.assertGreaterEqual(body["mutations_total"], 1)
+        self.assertIn("geofence_events", body)
+
     def test_pwa_geofence_events_list(self) -> None:
         GeofenceEvent.objects.create(
             location_label="casa",

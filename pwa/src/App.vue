@@ -24,6 +24,7 @@ import { clearPwaToken, getPwaToken, setPwaToken } from "./auth";
 import { sendChatAudio, sendChatMessage } from "./api/chat";
 import { uploadImage, uploadPdf } from "./api/documents";
 import GeofenceMap from "./components/GeofenceMap.vue";
+import { fetchObservability, formatObservabilityWhen, type PwaObservability } from "./api/observability";
 import { subscribeMyAgentPush } from "./push";
 
 type Tab = "home" | "shopping" | "today" | "chat" | "map";
@@ -34,6 +35,7 @@ const tab = ref<Tab>("home");
 const loading = ref(false);
 const error = ref("");
 const snapshot = ref<PwaSnapshot | null>(null);
+const observability = ref<PwaObservability | null>(null);
 
 const loginToken = ref("");
 const authenticated = ref(false);
@@ -124,7 +126,9 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    snapshot.value = await fetchSnapshot();
+    const [snap, obs] = await Promise.all([fetchSnapshot(), fetchObservability()]);
+    snapshot.value = snap;
+    observability.value = obs;
     authenticated.value = true;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
@@ -149,8 +153,37 @@ function submitLogin() {
 function logout() {
   clearPwaToken();
   snapshot.value = null;
+  observability.value = null;
   authenticated.value = false;
 }
+
+const mutationActionLabels: Record<string, string> = {
+  chat_message: "Chat texto",
+  chat_audio: "Chat áudio",
+  shopping_create: "Item mercado",
+  task_create: "Nova tarefa",
+  task_done: "Tarefa feita",
+  task_reopen: "Tarefa reaberta",
+  event_dismiss: "Compromisso feito",
+  event_snooze: "Adiar compromisso",
+  pdf_ingest: "PDF",
+  image_ingest: "Foto",
+};
+
+function mutationLabel(action: string): string {
+  return mutationActionLabels[action] ?? action;
+}
+
+const chatSharePercent = computed(() => {
+  const obs = observability.value;
+  if (!obs) return { pwa: 0, telegram: 0 };
+  const total = obs.interactions.pwa + obs.interactions.telegram;
+  if (total <= 0) return { pwa: 0, telegram: 0 };
+  return {
+    pwa: Math.round((obs.interactions.pwa / total) * 100),
+    telegram: Math.round((obs.interactions.telegram / total) * 100),
+  };
+});
 
 async function toggleBought(itemId: number) {
   if (busyShopping.value.has(itemId)) return;
@@ -562,6 +595,79 @@ onMounted(async () => {
       </section>
 
       <section v-else-if="tab === 'home' && snapshot" class="space-y-4">
+        <article v-if="observability" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <div class="mb-3 flex items-baseline justify-between gap-2">
+            <h3 class="font-medium text-slate-200">PWA vs Telegram</h3>
+            <span class="text-xs text-slate-500">últimos {{ observability.window_days }} dias</span>
+          </div>
+          <p class="mb-2 text-xs text-slate-500">Mensagens ao agente (chat / voz)</p>
+          <div class="mb-2 flex h-2 overflow-hidden rounded-full bg-slate-800">
+            <span
+              class="bg-sky-500 transition-all"
+              :style="{ width: `${chatSharePercent.pwa || 0}%` }"
+              title="PWA"
+            />
+            <span
+              class="bg-violet-500 transition-all"
+              :style="{ width: `${chatSharePercent.telegram || 0}%` }"
+              title="Telegram"
+            />
+          </div>
+          <div class="mb-3 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p class="text-sky-400">{{ observability.interactions.pwa }}</p>
+              <p class="text-slate-500">PWA</p>
+              <p class="mt-1 text-[10px] text-slate-600">
+                última: {{ formatObservabilityWhen(observability.last_interaction_at.pwa) }}
+              </p>
+            </div>
+            <div>
+              <p class="text-violet-300">{{ observability.interactions.telegram }}</p>
+              <p class="text-slate-500">Telegram</p>
+              <p class="mt-1 text-[10px] text-slate-600">
+                última: {{ formatObservabilityWhen(observability.last_interaction_at.telegram) }}
+              </p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 border-t border-slate-800 pt-3 text-xs text-slate-400">
+            <p>
+              Toques no PWA: <span class="text-slate-200">{{ observability.mutations_total }}</span>
+            </p>
+            <p>
+              Geofence: <span class="text-slate-200">{{ observability.geofence_events }}</span>
+            </p>
+            <p>
+              Push ativos: <span class="text-slate-200">{{ observability.push_subscriptions_active }}</span>
+            </p>
+            <p v-if="observability.telegram_send_failures != null">
+              Falhas envio TG:
+              <span
+                :class="observability.telegram_send_failures > 0 ? 'text-amber-400' : 'text-slate-200'"
+              >
+                {{ observability.telegram_send_failures }}
+              </span>
+            </p>
+          </div>
+          <ul
+            v-if="observability.mutations_by_action.length"
+            class="mt-3 space-y-1 border-t border-slate-800 pt-3 text-xs text-slate-500"
+          >
+            <li
+              v-for="row in observability.mutations_by_action.slice(0, 5)"
+              :key="row.action"
+              class="flex justify-between gap-2"
+            >
+              <span>{{ mutationLabel(row.action) }}</span>
+              <span class="text-slate-300">{{ row.count }}</span>
+            </li>
+          </ul>
+          <p
+            v-if="observability.llm_errors.pwa + observability.llm_errors.telegram > 0"
+            class="mt-2 text-[10px] text-amber-500/90"
+          >
+            Erros LLM: PWA {{ observability.llm_errors.pwa }}, Telegram {{ observability.llm_errors.telegram }}
+          </p>
+        </article>
         <article class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 class="mb-2 font-medium text-slate-200">Mercado</h3>
           <p class="text-3xl font-semibold text-sky-400">{{ snapshot.shopping.count }}</p>

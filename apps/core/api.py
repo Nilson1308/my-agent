@@ -45,6 +45,7 @@ from apps.memory.agent_pipeline import run_agent_message
 from apps.memory.image_ingest import ingest_image_bytes
 from apps.memory.pdf_ingest import PdfIngestError, ingest_pdf_bytes
 from apps.memory.models import GeofenceEvent, InteractionChannel, InteractionLog
+from apps.memory.pwa_observability import build_pwa_observability
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
 
@@ -176,6 +177,13 @@ def pwa_snapshot(request):
     if not configured_pwa_tokens():
         raise HttpError(503, "PWA não configurado no servidor.")
     return build_pwa_snapshot()
+
+
+@api.get("/pwa/observability/", auth=pwa_token_auth)
+def pwa_observability(request, days: int = 7):
+    if not configured_pwa_tokens():
+        raise HttpError(503, "PWA não configurado no servidor.")
+    return build_pwa_observability(window_days=days)
 
 
 class PushVapidOut(Schema):
