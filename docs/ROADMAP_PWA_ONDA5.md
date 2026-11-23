@@ -22,12 +22,15 @@ Mesmo **cérebro** (`run_agent_message`) nos dois canais; Telegram **não** é d
 - Aba **Mapa** (Leaflet + OSM) + histórico textual
 - `/macro/` atualizado com exemplo lat/lon
 
-## 5.4 PDF → notas (RAG local) 🔜
+## 5.4 PDF → notas (RAG local) ✅
 
-- Extrair texto, chunks, embedding fastembed
+- `POST /api/pwa/documents/pdf/` — `file` + `context` (form)
+- pypdf → trechos (~1k chars) → `Note` + embedding fastembed (sem Groq)
+- Limites: `PWA_PDF_MAX_BYTES`, `PWA_PDF_MAX_CHUNKS`
+- PWA: **Enviar PDF** na aba Chat; consulta via `search_notes` no chat
 
 ## 5.5 Foto + vision (limite diário) 🔜
 
 ---
 
-**Ordem restante:** 5.4 → 5.5
+**Ordem restante:** 5.5

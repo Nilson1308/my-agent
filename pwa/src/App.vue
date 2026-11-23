@@ -22,6 +22,7 @@ import {
 import { createPairingLink, exchangePairingCode } from "./api/pairing";
 import { clearPwaToken, getPwaToken, setPwaToken } from "./auth";
 import { sendChatAudio, sendChatMessage } from "./api/chat";
+import { uploadPdf } from "./api/documents";
 import GeofenceMap from "./components/GeofenceMap.vue";
 import { subscribeMyAgentPush } from "./push";
 
@@ -56,6 +57,8 @@ const chatLines = ref<ChatLine[]>([]);
 const chatInput = ref("");
 const chatBusy = ref(false);
 const recording = ref(false);
+const pdfContext = ref("pessoal");
+const pdfBusy = ref(false);
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 
@@ -341,6 +344,27 @@ async function toggleRecord() {
   }
 }
 
+async function onPdfSelected(ev: Event) {
+  const input = ev.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || pdfBusy.value) return;
+  pdfBusy.value = true;
+  error.value = "";
+  try {
+    const res = await uploadPdf(file, pdfContext.value);
+    const extra = res.truncated ? " (truncado no limite de trechos)" : "";
+    const msg = `PDF “${res.filename}”: ${res.chunks} trecho(s) na memória${extra}. Pergunte no chat o que quiser sobre o conteúdo.`;
+    chatLines.value.push({ role: "assistant", text: msg });
+    showToast("PDF indexado");
+    if (tab.value !== "chat") tab.value = "chat";
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha no PDF";
+  } finally {
+    pdfBusy.value = false;
+  }
+}
+
 async function submitChat() {
   const text = chatInput.value.trim();
   if (!text || chatBusy.value) return;
@@ -538,6 +562,26 @@ onMounted(async () => {
         <p class="mb-3 text-xs text-slate-500">
           Mesmo assistente do Telegram: mercado, tarefas, agenda, notas e busca na memória.
         </p>
+        <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <label class="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-slate-300">
+            {{ pdfBusy ? "PDF…" : "Enviar PDF" }}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              class="hidden"
+              :disabled="pdfBusy"
+              @change="onPdfSelected"
+            />
+          </label>
+          <select
+            v-model="pdfContext"
+            class="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-slate-300"
+          >
+            <option v-for="c in contextOptions" :key="c.value" :value="c.value">
+              {{ c.label }}
+            </option>
+          </select>
+        </div>
         <ul class="mb-3 max-h-[50vh] flex-1 space-y-2 overflow-y-auto">
           <li
             v-for="(line, i) in chatLines"

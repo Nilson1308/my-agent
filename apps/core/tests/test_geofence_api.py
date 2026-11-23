@@ -313,6 +313,31 @@ class PwaApiTests(TestCase):
             InteractionLog.objects.filter(channel=InteractionChannel.PWA).exists()
         )
 
+    @patch(
+        "apps.memory.pdf_ingest.extract_pdf_text",
+        return_value="Conteúdo do documento sobre finanças e casa. " * 80,
+    )
+    def test_pwa_pdf_ingest(self, _extract) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.memory.models import Note
+
+        client = Client()
+        upload = SimpleUploadedFile(
+            "teste.pdf",
+            b"%PDF-1.4 mock",
+            content_type="application/pdf",
+        )
+        r = client.post(
+            "/api/pwa/documents/pdf/",
+            data={"context": "casa", "file": upload},
+            HTTP_X_PWA_TOKEN="test-pwa-token",
+        )
+        self.assertEqual(r.status_code, 200, msg=r.content.decode()[:500])
+        body = r.json()
+        self.assertGreater(body["chunks"], 0)
+        self.assertTrue(Note.objects.filter(pk__in=body["note_ids"]).exists())
+
     def test_pwa_geofence_events_list(self) -> None:
         GeofenceEvent.objects.create(
             location_label="casa",

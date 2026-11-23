@@ -34,6 +34,10 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). Leitura + escrita tátil; `work
 - `POST /api/pwa/chat/` — `{"text": "..."}` — mesma IA do Telegram (`run_agent_message`); log `channel=pwa`
 - `POST /api/pwa/chat/audio/` — multipart campo `audio` → Whisper
 
+**Documentos (5.4):**
+
+- `POST /api/pwa/documents/pdf/` — multipart `file`, form `context`
+
 **Geofence / mapa (5.3):**
 
 - Webhook body: `location`, opcional `lat`, `lon`

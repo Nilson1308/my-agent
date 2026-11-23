@@ -41,6 +41,7 @@ from apps.memory.pwa_mutations import (
     pwa_snooze_event,
 )
 from apps.memory.agent_pipeline import run_agent_message
+from apps.memory.pdf_ingest import PdfIngestError, ingest_pdf_bytes
 from apps.memory.models import GeofenceEvent, InteractionChannel, InteractionLog
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
@@ -584,6 +585,40 @@ def pwa_chat_audio(request, audio: UploadedFile = File(...)):
         interaction_log_id=agent_reply.interaction_log_id,
         pending_confirmation=agent_reply.pending_confirmation_id is not None,
     )
+
+
+class PdfIngestOut(Schema):
+    filename: str
+    chunks: int
+    chars: int
+    note_ids: list[int]
+    truncated: bool
+    context: str
+
+
+@api.post(
+    "/pwa/documents/pdf/",
+    auth=pwa_token_auth,
+    response={200: PdfIngestOut, 400: dict, 503: dict},
+)
+def pwa_pdf_ingest(request, file: UploadedFile = File(...)):
+    if not configured_pwa_tokens():
+        raise HttpError(503, "PWA não configurado.")
+    enforce_pwa_write_rate_limit(request)
+    context = (request.POST.get("context") or "pessoal").strip()
+    name = file.name or "documento.pdf"
+    if not name.lower().endswith(".pdf") and (file.content_type or "") != "application/pdf":
+        raise HttpError(400, "Envie um arquivo PDF.")
+    try:
+        data = b"".join(file.chunks())
+        result = ingest_pdf_bytes(data, name, context=context)
+    except PdfIngestError as exc:
+        raise HttpError(400, exc.message) from exc
+    except Exception as exc:
+        logger.exception("pwa pdf ingest: %s", exc)
+        raise HttpError(500, "Falha ao processar PDF.") from exc
+    log_pwa_mutation(request, "pdf_ingest", target_type="note", target_id=result["note_ids"][0] if result["note_ids"] else None)
+    return PdfIngestOut(**result)
 
 
 def _finish_geofence(
