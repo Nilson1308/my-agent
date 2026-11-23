@@ -31,6 +31,7 @@ from apps.memory.models import (
     Event,
     InteractionLog,
     InputType,
+    InteractionChannel,
     Note,
     Reminder,
     ShoppingItem,
@@ -59,6 +60,7 @@ def execute_agent_plan(
     input_type: str = "text",
     llm_outcome: str = LLM_OK,
     telegram_user_id: int | None = None,
+    channel: str = InteractionChannel.TELEGRAM,
 ) -> AgentReply:
     """Executa ações do plano no banco e persiste InteractionLog."""
     lines: list[str] = []
@@ -95,6 +97,9 @@ def execute_agent_plan(
     valid_input_types = {choice.value for choice in InputType}
     if input_type not in valid_input_types:
         input_type = InputType.TEXT
+    valid_channels = {choice.value for choice in InteractionChannel}
+    if channel not in valid_channels:
+        channel = InteractionChannel.TELEGRAM
 
     effects = [] if pending_confirmation_id else recorder.effects
     log = InteractionLog.objects.create(
@@ -104,6 +109,7 @@ def execute_agent_plan(
         bot_response=response,
         llm_outcome=llm_outcome,
         telegram_user_id=telegram_user_id,
+        channel=channel,
         effects_json=effects,
     )
 

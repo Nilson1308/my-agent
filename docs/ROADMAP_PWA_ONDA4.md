@@ -63,3 +63,5 @@ Superfície **`/app/`** evoluindo de leitora para **painel tátil** do my-agent,
 ---
 
 **Restante opcional:** 4.5 offline · dashboard 4.9 · push geofence.
+
+**Onda 5 (chat/RAG/mapa):** ver `docs/ROADMAP_PWA_ONDA5.md`.

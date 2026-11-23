@@ -29,6 +29,10 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). Leitura + escrita tátil; `work
 - `POST /api/pwa/push/subscribe/` — body Web Push `endpoint` + `keys`
 - `POST /api/pwa/push/unsubscribe/`
 
+**Chat agente (5.1):**
+
+- `POST /api/pwa/chat/` — `{"text": "..."}` — mesma IA do Telegram (`run_agent_message`); log `channel=pwa`
+
 **Pairing / rotação (4.7):**
 
 - Auth aceita `PWA_API_TOKEN` ou `PWA_API_TOKEN_PREVIOUS`

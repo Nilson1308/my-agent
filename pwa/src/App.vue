@@ -21,9 +21,12 @@ import {
 } from "./api/snapshot";
 import { createPairingLink, exchangePairingCode } from "./api/pairing";
 import { clearPwaToken, getPwaToken, setPwaToken } from "./auth";
+import { sendChatMessage } from "./api/chat";
 import { subscribeMyAgentPush } from "./push";
 
-type Tab = "home" | "shopping" | "today";
+type Tab = "home" | "shopping" | "today" | "chat";
+
+type ChatLine = { role: "user" | "assistant"; text: string };
 
 const tab = ref<Tab>("home");
 const loading = ref(false);
@@ -47,6 +50,10 @@ const pushMsg = ref("");
 const pairingOpen = ref(false);
 const pairingUrl = ref("");
 const pairingBusy = ref(false);
+
+const chatLines = ref<ChatLine[]>([]);
+const chatInput = ref("");
+const chatBusy = ref(false);
 
 const { toastMessage, showToast } = useToast();
 
@@ -288,6 +295,32 @@ async function enablePush() {
   }
 }
 
+async function submitChat() {
+  const text = chatInput.value.trim();
+  if (!text || chatBusy.value) return;
+  chatBusy.value = true;
+  error.value = "";
+  chatLines.value.push({ role: "user", text });
+  chatInput.value = "";
+  try {
+    const res = await sendChatMessage(text);
+    chatLines.value.push({ role: "assistant", text: res.reply });
+    if (res.llm_outcome === "groq_rate_limit") {
+      showToast("Limite Groq — tente em instantes");
+    }
+    if (res.pending_confirmation) {
+      showToast("Confirme no Telegram se pediu confirmação");
+    }
+    await load();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Falha no chat";
+    error.value = msg;
+    chatLines.value.push({ role: "assistant", text: msg });
+  } finally {
+    chatBusy.value = false;
+  }
+}
+
 async function openPairingQr() {
   if (pairingBusy.value) return;
   pairingBusy.value = true;
@@ -333,7 +366,7 @@ onMounted(async () => {
     <header class="mb-6 flex items-start justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight text-slate-50">My Agent</h1>
-        <p class="text-sm text-slate-400">Mercado e tarefas — toque para marcar</p>
+        <p class="text-sm text-slate-400">Mercado, tarefas e chat — igual ao Telegram</p>
       </div>
       <button
         v-if="authenticated"
@@ -376,6 +409,7 @@ onMounted(async () => {
         <button
           v-for="t in [
             { id: 'home', label: 'Início' },
+            { id: 'chat', label: 'Chat' },
             { id: 'shopping', label: 'Mercado' },
             { id: 'today', label: 'Hoje' },
           ]"
@@ -451,6 +485,48 @@ onMounted(async () => {
         <p class="text-center text-xs text-slate-500">
           Instale na tela inicial: menu do navegador → “Adicionar à tela inicial”.
         </p>
+      </section>
+
+      <section v-else-if="tab === 'chat'" class="flex min-h-0 flex-1 flex-col pb-20">
+        <p class="mb-3 text-xs text-slate-500">
+          Mesmo assistente do Telegram: mercado, tarefas, agenda, notas e busca na memória.
+        </p>
+        <ul class="mb-3 max-h-[50vh] flex-1 space-y-2 overflow-y-auto">
+          <li
+            v-for="(line, i) in chatLines"
+            :key="i"
+            class="rounded-xl px-3 py-2 text-sm whitespace-pre-wrap"
+            :class="
+              line.role === 'user'
+                ? 'ml-6 bg-sky-950/50 text-sky-100'
+                : 'mr-6 border border-slate-800 bg-slate-900/60 text-slate-200'
+            "
+          >
+            {{ line.text }}
+          </li>
+          <li v-if="!chatLines.length" class="text-center text-sm text-slate-500">
+            Pergunte ou registre algo em linguagem natural.
+          </li>
+        </ul>
+        <div class="fixed bottom-[max(5rem,env(safe-area-inset-bottom))] left-0 right-0 z-10 mx-auto max-w-lg px-4">
+          <form class="flex gap-2" @submit.prevent="submitChat">
+            <input
+              v-model="chatInput"
+              type="text"
+              autocomplete="off"
+              placeholder="Mensagem…"
+              class="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-sky-500"
+              :disabled="chatBusy"
+            />
+            <button
+              type="submit"
+              class="shrink-0 rounded-xl bg-sky-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+              :disabled="chatBusy || !chatInput.trim()"
+            >
+              {{ chatBusy ? "…" : "Enviar" }}
+            </button>
+          </form>
+        </div>
       </section>
 
       <section v-else-if="tab === 'shopping' && snapshot">
@@ -607,6 +683,7 @@ onMounted(async () => {
       </section>
 
       <button
+        v-if="tab !== 'chat'"
         type="button"
         class="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-sky-600 text-2xl font-light text-white shadow-lg shadow-sky-900/50 active:bg-sky-700"
         aria-label="Adicionar item ou tarefa"

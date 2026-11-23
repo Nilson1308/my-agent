@@ -34,6 +34,8 @@ from apps.memory.pwa_mutations import (
     pwa_reopen_task,
     pwa_snooze_event,
 )
+from apps.memory.agent_pipeline import run_agent_message
+from apps.memory.models import InteractionChannel, InteractionLog
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
 
@@ -184,6 +186,55 @@ class PairingExchangeIn(Schema):
 
 class PairingExchangeOut(Schema):
     token: str
+
+
+class PwaChatIn(Schema):
+    text: str
+
+
+class PwaChatOut(Schema):
+    reply: str
+    llm_outcome: str = ""
+    interaction_log_id: int | None = None
+    pending_confirmation: bool = False
+
+
+@api.post("/pwa/chat/", auth=pwa_token_auth, response={200: PwaChatOut, 400: dict, 503: dict})
+def pwa_chat(request, payload: PwaChatIn):
+    if not configured_pwa_tokens():
+        raise HttpError(503, "PWA não configurado.")
+    text = (payload.text or "").strip()
+    if not text:
+        raise HttpError(400, "Mensagem vazia.")
+    if len(text) > 8000:
+        raise HttpError(400, "Mensagem muito longa.")
+    enforce_pwa_write_rate_limit(request)
+    try:
+        agent_reply = run_agent_message(
+            text,
+            channel=InteractionChannel.PWA,
+            input_type="text",
+        )
+    except Exception as exc:
+        logger.exception("pwa chat falhou: %s", exc)
+        raise HttpError(500, "Falha ao processar mensagem.") from exc
+
+    outcome = ""
+    if agent_reply.interaction_log_id:
+        log = InteractionLog.objects.filter(pk=agent_reply.interaction_log_id).first()
+        if log:
+            outcome = log.llm_outcome or ""
+    elif agent_reply.pending_confirmation_id:
+        outcome = "pending_confirmation"
+
+    log_pwa_mutation(request, "chat_message", target_type="interaction")
+
+    return PwaChatOut(
+        reply=agent_reply.message,
+        llm_outcome=outcome,
+        interaction_log_id=agent_reply.interaction_log_id,
+        pending_confirmation=agent_reply.pending_confirmation_id is not None,
+    )
 
 
 @api.get("/pwa/push/vapid/", auth=None, response=PushVapidOut)

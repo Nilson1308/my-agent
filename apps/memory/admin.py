@@ -90,6 +90,7 @@ class InteractionLogAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "input_type",
+        "channel",
         "llm_outcome",
         "telegram_user_id",
         "user_feedback",

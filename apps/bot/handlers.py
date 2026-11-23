@@ -15,19 +15,21 @@ from telegram.constants import ChatAction
 from telegram.error import NetworkError, TimedOut
 from telegram.ext import ContextTypes, filters
 
-from apps.ai.groq_service import parse_user_message, transcribe_audio
+from apps.ai.groq_service import transcribe_audio
+from apps.memory.agent_pipeline import run_agent_message
+from apps.memory.models import InteractionChannel
 from apps.ai.tts_service import synthesize_speech, try_mp3_to_ogg_opus
 from apps.bot.direct_commands import execute_direct_command
 from apps.bot.help_text import HELP_MESSAGE
 from apps.bot.telegram_keyboards import feedback_keyboard, pending_confirmation_keyboard
 from apps.memory.preferences import apply_preference_update, feedback_enabled_for_user
-from apps.memory.confirmation import handle_pending_reply, resolve_pending
+from apps.memory.confirmation import resolve_pending
 from apps.memory.feedback import apply_interaction_feedback
 from apps.memory.models import PendingConfirmation
 from apps.memory.review_today import build_today_digest
 from apps.memory.undo import undo_last_interaction
 from apps.memory.reply_types import AgentReply
-from apps.memory.services import execute_agent_plan, format_active_shopping_list
+from apps.memory.services import format_active_shopping_list
 
 logger = logging.getLogger(__name__)
 
@@ -155,20 +157,11 @@ def _tts_summary(body: str) -> str:
 async def _run_pipeline(
     raw_input: str, input_type: str, telegram_user_id: int
 ) -> AgentReply:
-    pending_reply = await sync_to_async(handle_pending_reply, thread_sensitive=True)(
-        telegram_user_id,
+    return await sync_to_async(run_agent_message, thread_sensitive=True)(
         raw_input,
-    )
-    if pending_reply is not None:
-        return AgentReply(message=pending_reply, telegram_user_id=telegram_user_id)
-
-    parse_result = await sync_to_async(parse_user_message, thread_sensitive=False)(raw_input)
-    return await sync_to_async(execute_agent_plan, thread_sensitive=True)(
-        parse_result.plan,
-        raw_input,
-        input_type,
-        parse_result.outcome,
-        telegram_user_id,
+        channel=InteractionChannel.TELEGRAM,
+        input_type=input_type,
+        telegram_user_id=telegram_user_id,
     )
 
 

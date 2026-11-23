@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from apps.ai.llm_outcomes import LLM_OK
+from apps.ai.schemas import AgentPlan
+from apps.ai.groq_service import LlmParseResult
+from apps.memory.models import InteractionLog, InteractionChannel
+
 from datetime import datetime, time, timedelta
 
 import redis
@@ -278,6 +283,29 @@ class PwaApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(r2.status_code, 401)
+
+    @patch("apps.memory.agent_pipeline.parse_user_message")
+    def test_pwa_chat(self, mock_parse) -> None:
+        mock_parse.return_value = LlmParseResult(
+            plan=AgentPlan(
+                actions=[],
+                reply_hint="Ok no teste",
+            ),
+            outcome=LLM_OK,
+        )
+        client = Client()
+        r = client.post(
+            "/api/pwa/chat/",
+            data='{"text": "lista do mercado"}',
+            content_type="application/json",
+            HTTP_X_PWA_TOKEN="test-pwa-token",
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("reply", body)
+        self.assertTrue(
+            InteractionLog.objects.filter(channel=InteractionChannel.PWA).exists()
+        )
 
 
 @override_settings()

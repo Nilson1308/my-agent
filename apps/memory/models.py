@@ -21,6 +21,11 @@ class InputType(models.TextChoices):
     AUDIO = "audio", "Áudio"
 
 
+class InteractionChannel(models.TextChoices):
+    TELEGRAM = "telegram", "Telegram"
+    PWA = "pwa", "PWA"
+
+
 class ShoppingItem(models.Model):
     name = models.CharField(max_length=255)
     quantity = models.CharField(max_length=64, blank=True)
@@ -187,6 +192,12 @@ class InteractionLog(models.Model):
     bot_response = models.TextField(blank=True)
     llm_outcome = models.CharField(max_length=24, blank=True, default="")
     telegram_user_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    channel = models.CharField(
+        max_length=16,
+        choices=InteractionChannel.choices,
+        default=InteractionChannel.TELEGRAM,
+        db_index=True,
+    )
     effects_json = models.JSONField(default=list, blank=True)
     user_feedback = models.SmallIntegerField(
         null=True,
