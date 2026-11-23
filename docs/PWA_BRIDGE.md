@@ -1,6 +1,6 @@
 # Ponte PWA ↔ my-agent (Onda 3)
 
-API read-only para um PWA complementar (ex.: `app-pwa-gf` ou futuro `work-agent`).
+PWA em **`/app/`** (código em `my-agent/pwa/`). API read-only; `work-agent` reusará o padrão com JWT.
 
 ## Endpoint
 
@@ -9,6 +9,11 @@ API read-only para um PWA complementar (ex.: `app-pwa-gf` ou futuro `work-agent`
 **Header:** `X-PWA-Token: <PWA_API_TOKEN>` (mesmo valor do `.env`)
 
 **Resposta 200:** JSON com `shopping`, `tasks_pending`, `events_today`, `generated_at`.
+
+**Escrita (PWA v1):**
+
+- `PATCH /api/pwa/shopping/{id}/` — body `{"bought": true}` (marca comprado)
+- `PATCH /api/pwa/tasks/{id}/` — conclui tarefa pendente
 
 **Erros:**
 

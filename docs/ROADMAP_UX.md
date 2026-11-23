@@ -33,7 +33,7 @@
 
 | # | Entrega | Notas |
 |---|---------|--------|
-| 3.1 | PWA complementar | `GET /api/pwa/snapshot/` + `docs/PWA_BRIDGE.md`; UI em work-agent/app-pwa-gf |
+| 3.1 | PWA complementar ✅ v0 | `my-agent/pwa` em `/app/` (leitura); ver `docs/PWA_STACK.md` |
 | 3.2 | Preferências | `UserPreferences` + `/prefs` |
 | 3.3 | Atalhos sem Groq | `/lista`, `/resumo` |
 | 3.4 | Google Calendar | **Não implementado** — ver `docs/GOOGLE_CALENDAR_PHASE2.md` |

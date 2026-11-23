@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from django.test import Client, TestCase, override_settings
 
+from apps.memory.models import ShoppingItem, Task
+
 
 @override_settings(
     GEOFENCE_WEBHOOK_TOKEN="test-geofence-token",
@@ -66,6 +68,25 @@ class PwaApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertIn("shopping", body)
+
+    def test_pwa_mark_shopping_and_complete_task(self) -> None:
+        item = ShoppingItem.objects.create(name="Teste PWA")
+        task = Task.objects.create(title="Tarefa PWA", context="casa")
+        client = Client()
+        headers = {"HTTP_X_PWA_TOKEN": "test-pwa-token"}
+        r1 = client.patch(
+            f"/api/pwa/shopping/{item.pk}/",
+            data='{"bought": true}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r1.status_code, 200)
+        item.refresh_from_db()
+        self.assertTrue(item.is_bought)
+        r2 = client.patch(f"/api/pwa/tasks/{task.pk}/", **headers)
+        self.assertEqual(r2.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.status, "done")
 
 
 @override_settings()

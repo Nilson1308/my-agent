@@ -8,10 +8,12 @@ from django.conf import settings
 from django.db import connection
 import redis
 from ninja import NinjaAPI, Schema
+from ninja.errors import HttpError
 from ninja.security import APIKeyHeader
 
 from apps.bot.telegram_client import get_send_failure_count, send_message_sync
 from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
+from apps.memory.pwa_mutations import PwaMutationError, pwa_complete_task, pwa_mark_shopping_bought
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
 
@@ -138,6 +140,54 @@ def geofence_webhook(request, payload: GeofencePayload | None = None) -> Geofenc
 @api.get("/pwa/snapshot/", auth=pwa_token_auth)
 def pwa_snapshot(request):
     return build_pwa_snapshot()
+
+
+class ShoppingPatchIn(Schema):
+    bought: bool = True
+
+
+class ShoppingPatchOut(Schema):
+    id: int
+    name: str
+    is_bought: bool
+
+
+class TaskPatchOut(Schema):
+    id: int
+    title: str
+    status: str
+    completed_at: str
+
+
+def _pwa_mutation_http(exc: PwaMutationError) -> None:
+    code = 404 if exc.code == "not_found" else 409 if exc.code == "already_done" else 400
+    raise HttpError(code, exc.message)
+
+
+@api.patch(
+    "/pwa/shopping/{item_id}/",
+    auth=pwa_token_auth,
+    response={200: ShoppingPatchOut, 404: dict, 409: dict},
+)
+def pwa_shopping_patch(request, item_id: int, payload: ShoppingPatchIn):
+    try:
+        return pwa_mark_shopping_bought(item_id, bought=payload.bought)
+    except PwaMutationError as exc:
+        _pwa_mutation_http(exc)
+    raise HttpError(500, "Erro interno")
+
+
+@api.patch(
+    "/pwa/tasks/{task_id}/",
+    auth=pwa_token_auth,
+    response={200: TaskPatchOut, 404: dict, 409: dict},
+)
+def pwa_task_complete(request, task_id: int):
+    try:
+        return pwa_complete_task(task_id)
+    except PwaMutationError as exc:
+        _pwa_mutation_http(exc)
+    raise HttpError(500, "Erro interno")
 
 
 def _log_geofence(

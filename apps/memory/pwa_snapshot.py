@@ -20,7 +20,7 @@ def build_pwa_snapshot() -> dict:
 
     shopping_text, shopping_count = format_active_shopping_list()
     items = [
-        {"name": i.name, "quantity": i.quantity or ""}
+        {"id": i.pk, "name": i.name, "quantity": i.quantity or ""}
         for i in ShoppingItem.objects.filter(is_bought=False).order_by("name")[:200]
     ]
 

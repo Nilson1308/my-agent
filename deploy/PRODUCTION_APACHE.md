@@ -93,6 +93,16 @@ Health check (sem segredo):
 curl -sS https://copa.mogidascruzes.sp.gov.br/api/health/
 ```
 
+### PWA (`/app/`)
+
+1. Defina `PWA_API_TOKEN` no `.env` (mesmo valor que o usuário cola no app).
+2. Build: `./deploy/build-pwa.sh` (Node 20+ no host).
+3. Vhost COPA: `deploy/apache/copa.mogidascruzes.sp.gov.br.conf` — `Alias /app` + `ProxyPass /app !`.
+4. Módulos: `sudo a2enmod proxy proxy_http headers alias rewrite`
+5. Abra `https://copa.mogidascruzes.sp.gov.br/app/` e informe o token.
+
+Ver `docs/PWA_STACK.md` e `pwa/README.md`.
+
 ### 4. Apache2
 
 ```bash
