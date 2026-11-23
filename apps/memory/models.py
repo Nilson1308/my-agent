@@ -48,11 +48,13 @@ class Task(models.Model):
     title = models.CharField(max_length=512)
     context = models.CharField(max_length=32, choices=DomainContext.choices)
     due_date = models.DateField(null=True, blank=True)
+    due_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=16,
         choices=TaskStatus.choices,
         default=TaskStatus.PENDING,
     )
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -81,6 +83,55 @@ class Event(models.Model):
         return self.title
 
 
+class Reminder(models.Model):
+    title = models.CharField(max_length=512)
+    message = models.TextField(blank=True)
+    context = models.CharField(max_length=32, choices=DomainContext.choices, default=DomainContext.PESSOAL)
+    remind_at = models.DateTimeField()
+    reminded = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["remind_at"]
+        verbose_name = "lembrete agendado"
+        verbose_name_plural = "lembretes agendados"
+
+    def __str__(self) -> str:
+        return f"{self.title} @ {self.remind_at:%d/%m %H:%M}"
+
+
+class UserPreferences(models.Model):
+    telegram_user_id = models.BigIntegerField(unique=True, db_index=True)
+    default_context = models.CharField(
+        max_length=32,
+        choices=DomainContext.choices,
+        blank=True,
+    )
+    feedback_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "preferências do usuário"
+        verbose_name_plural = "preferências dos usuários"
+
+    def __str__(self) -> str:
+        return f"prefs:{self.telegram_user_id}"
+
+
+class PendingConfirmation(models.Model):
+    telegram_user_id = models.BigIntegerField(db_index=True)
+    action_type = models.CharField(max_length=32)
+    payload_json = models.JSONField()
+    prompt_message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "confirmação pendente"
+        verbose_name_plural = "confirmações pendentes"
+
+
 class Note(models.Model):
     content = models.TextField()
     context = models.CharField(max_length=32, choices=DomainContext.choices)
@@ -105,6 +156,14 @@ class InteractionLog(models.Model):
     parsed_json = models.JSONField(null=True, blank=True)
     bot_response = models.TextField(blank=True)
     llm_outcome = models.CharField(max_length=24, blank=True, default="")
+    telegram_user_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    effects_json = models.JSONField(default=list, blank=True)
+    user_feedback = models.SmallIntegerField(
+        null=True,
+        blank=True,
+        choices=[(1, "Bom"), (-1, "Ruim")],
+    )
+    undone_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

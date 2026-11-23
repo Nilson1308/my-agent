@@ -128,6 +128,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.memory.tasks.check_upcoming_events",
         "schedule": crontab(minute="*/15"),
     },
+    "check-scheduled-reminders": {
+        "task": "apps.memory.tasks.check_scheduled_reminders",
+        "schedule": crontab(minute="*/1"),
+    },
 }
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -138,6 +142,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_LLM_MODEL = os.getenv("GROQ_LLM_MODEL", "openai/gpt-oss-120b")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 GEOFENCE_WEBHOOK_TOKEN = os.getenv("GEOFENCE_WEBHOOK_TOKEN", "")
+PWA_API_TOKEN = os.getenv("PWA_API_TOKEN", "").strip()
 GEOFENCE_RATE_LIMIT_SECONDS = int(os.getenv("GEOFENCE_RATE_LIMIT_SECONDS", "120"))
 
 # Lembrete de compromisso: ~EVENT_REMINDER_MINUTES_BEFORE (janela ± EVENT_REMINDER_WINDOW_MINUTES).

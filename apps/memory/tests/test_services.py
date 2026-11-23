@@ -25,15 +25,29 @@ class ShoppingServicesTests(TestCase):
             reply_hint="ok",
         )
         response = execute_agent_plan(plan, raw_input="comprar feijão")
-        self.assertIn("feijão", response.lower())
+        self.assertIn("feijão", response.message.lower())
         self.assertEqual(ShoppingItem.objects.filter(is_bought=False).count(), 1)
 
-    def test_add_shopping_no_duplicate_pending(self) -> None:
+    def test_add_shopping_duplicate_without_telegram_prompts(self) -> None:
         plan = AgentPlan(
             actions=[AgentAction(type="add_shopping", item_name="Feijão")],
             reply_hint="ok",
         )
-        execute_agent_plan(plan, raw_input="feijão")
-        response = execute_agent_plan(plan, raw_input="feijão de novo")
-        self.assertIn("já na lista", response.lower())
+        execute_agent_plan(plan, raw_input="feijão", telegram_user_id=12345)
+        response = execute_agent_plan(plan, raw_input="feijão de novo", telegram_user_id=12345)
+        self.assertIn("parecido", response.message.lower())
         self.assertEqual(ShoppingItem.objects.filter(is_bought=False).count(), 1)
+
+    def test_complete_task_sets_completed_at(self) -> None:
+        from apps.memory.models import Task, TaskStatus
+
+        task = Task.objects.create(title="Enviar relatório", context="trabalho")
+        plan = AgentPlan(
+            actions=[AgentAction(type="complete_task", title="relatório")],
+            reply_hint="ok",
+        )
+        response = execute_agent_plan(plan, raw_input="concluí relatório")
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.DONE)
+        self.assertIsNotNone(task.completed_at)
+        self.assertIn("histórico", response.message.lower())

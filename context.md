@@ -39,6 +39,9 @@ Toda mensagem (texto ou áudio transcrito) pode conter **uma ou múltiplas inten
 3. Áudio: transcrição Groq (`whisper-large-v3-turbo`).
 4. Texto + contexto temporal (`America/Sao_Paulo`) → LLM (`GROQ_LLM_MODEL`) → `AgentPlan`.
 5. `apps/memory/services.execute_agent_plan` persiste no PostgreSQL.
+6. Roadmap de UX/interação: `docs/ROADMAP_UX.md` (Ondas 1–2 no bot; Onda 3 planejada).
+7. Onda 2–3: comandos `/hoje`, `/desfazer`, `/lista`, `/resumo`, `/prefs`; API PWA `docs/PWA_BRIDGE.md`.
+8. **Event** = compromisso na agenda (`start_at`). **Reminder** = alerta agendado (Celery ~1 min).
 6. Resposta curta no Telegram; envio síncrono compartilhado em `apps/bot/telegram_client.py`.
 
 ## 5. Proatividade & Automações

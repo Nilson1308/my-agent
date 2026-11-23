@@ -20,6 +20,10 @@ ActionType = Literal[
     "add_note",
     "search_notes",
     "summarize",
+    "schedule_reminder",
+    "list_reminders",
+    "cancel_reminder",
+    "list_tasks_done",
 ]
 
 DomainContext = Literal["casa", "theo", "trabalho", "pessoal"]
@@ -35,9 +39,17 @@ class AgentAction(BaseModel):
         default=None,
         description="Data de vencimento (ISO 8601, ex: 2025-11-20)",
     )
+    due_at: str | None = Field(
+        default=None,
+        description="Prazo com hora (ISO 8601, ex: 2025-11-20T18:30:00-03:00)",
+    )
     start_at: str | None = Field(
         default=None,
         description="Início do compromisso (ISO 8601 com timezone ou offset -03:00)",
+    )
+    remind_at: str | None = Field(
+        default=None,
+        description="Horário exato do lembrete (ISO 8601, ex: lembrete às 07:15)",
     )
     content: str | None = None
     query: str | None = None

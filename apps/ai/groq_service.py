@@ -83,6 +83,7 @@ def _system_prompt() -> str:
             "delete_task",
             "clear_tasks",
             "list_tasks",
+            "list_tasks_done",
             "add_event",
             "delete_event",
             "clear_events",
@@ -90,6 +91,9 @@ def _system_prompt() -> str:
             "add_note",
             "search_notes",
             "summarize",
+            "schedule_reminder",
+            "list_reminders",
+            "cancel_reminder",
         ]
     )
     return f"""Você é o roteador de um assistente pessoal em português do Brasil.
@@ -113,7 +117,10 @@ Regras:
   * clear_tasks: sem title; opcional context — apaga TODAS as tarefas pendentes
     (use para "remover todas as pendentes", "limpar lista de tarefas", etc.)
   * list_tasks: context (opcional)
+  * list_tasks_done: sem campos (histórico de concluídas)
   * add_event: title, context, start_at
+  * schedule_reminder: title, remind_at (ISO horário do aviso), content opcional (mensagem)
+  * list_reminders / cancel_reminder: title opcional para cancelar
   * delete_event: title (apaga compromisso(s) que casem no título)
   * clear_events: sem title; opcional context — apaga TODOS os compromissos futuros
   * list_events: sem campos
@@ -123,9 +130,10 @@ Regras:
   * add_note: content, context
   * search_notes: query (obrigatório; NUNCA use sem query)
   * summarize: sem campos — visão geral: mercado + tarefas pendentes + compromissos + últimas notas
-- Mercado: não duplique itens já pendentes — prefira dedupe_shopping ou omita add_shopping repetido.
-- Duplicatas no mercado: use dedupe_shopping (NUNCA invente add_shopping com quantidade negativa).
-- Remover/apagar/excluir tarefa: delete_task. Concluir/marcar feito: complete_task.
+- Lembrete em horário fixo ("me avise amanhã 7h15"): use schedule_reminder com remind_at ISO, context theo/casa quando couber.
+- Concluir/cumprir/feito → SEMPRE complete_task. Só delete_task se pedir apagar/remover do sistema.
+- Duplicatas: ainda use add_shopping/add_task/add_event; o bot pergunta ao usuário se já existir similar.
+- dedupe_shopping: limpar duplicatas explícitas no mercado.
 - Inferir "context" quando óbvio (Theo -> theo, mercado/casa -> casa).
 - "reply_hint": confirmação curta; nunca mencione falta de permissão.
 - Tipos permitidos: {action_types}.

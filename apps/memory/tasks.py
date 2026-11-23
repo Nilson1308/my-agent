@@ -7,7 +7,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from apps.bot.notifier import send_telegram_message
-from apps.memory.models import DomainContext, Event, Task, TaskStatus
+from apps.memory.models import DomainContext, Event, Reminder, Task, TaskStatus
 from apps.memory.services import format_active_shopping_list
 
 
@@ -123,3 +123,25 @@ def check_upcoming_events() -> dict[str, object]:
             reminded_count += 1
 
     return {"checked": len(events), "reminded": reminded_count}
+
+
+@shared_task(name="apps.memory.tasks.check_scheduled_reminders")
+def check_scheduled_reminders() -> dict[str, object]:
+    now = timezone.now()
+    reminders = list(
+        Reminder.objects.filter(reminded=False, remind_at__lte=now).order_by("remind_at")
+    )
+    sent = 0
+    for reminder in reminders:
+        local = timezone.localtime(reminder.remind_at)
+        text = (
+            f"⏰ Lembrete: {reminder.title}\n"
+            f"[{reminder.context}] · {local:%d/%m às %H:%M}"
+        )
+        if reminder.message and reminder.message != reminder.title:
+            text += f"\n{reminder.message}"
+        if send_telegram_message(text):
+            reminder.reminded = True
+            reminder.save(update_fields=["reminded"])
+            sent += 1
+    return {"due": len(reminders), "sent": sent}

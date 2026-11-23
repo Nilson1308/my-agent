@@ -12,6 +12,7 @@ from ninja.security import APIKeyHeader
 
 from apps.bot.telegram_client import get_send_failure_count, send_message_sync
 from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
+from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,21 @@ def _check_redis() -> bool:
         return False
 
 
+class PwaAuth(APIKeyHeader):
+    param_name = "X-PWA-Token"
+
+    def authenticate(self, request, key: str | None):
+        expected = (settings.PWA_API_TOKEN or "").strip()
+        if not expected or not key:
+            return None
+        if not secrets.compare_digest(expected, key.strip()):
+            return None
+        return key
+
+
+pwa_token_auth = PwaAuth()
+
+
 @api.get("/health/", auth=None, response=HealthOut)
 def health(request) -> HealthOut:
     db_ok = _check_database()
@@ -117,6 +133,11 @@ def geofence_webhook(request, payload: GeofencePayload | None = None) -> Geofenc
     status = "sent"
     _log_geofence(ip, count, True, status, started)
     return GeofenceOut(status=status, items_count=count, telegram_sent=True)
+
+
+@api.get("/pwa/snapshot/", auth=pwa_token_auth)
+def pwa_snapshot(request):
+    return build_pwa_snapshot()
 
 
 def _log_geofence(

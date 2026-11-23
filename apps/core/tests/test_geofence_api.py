@@ -52,6 +52,22 @@ class GeofenceApiTests(TestCase):
         self.assertTrue(data["telegram_sent"])
 
 
+@override_settings(PWA_API_TOKEN="test-pwa-token")
+class PwaApiTests(TestCase):
+    def test_pwa_unauthorized(self) -> None:
+        response = Client().get("/api/pwa/snapshot/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_pwa_ok(self) -> None:
+        response = Client().get(
+            "/api/pwa/snapshot/",
+            HTTP_X_PWA_TOKEN="test-pwa-token",
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("shopping", body)
+
+
 @override_settings()
 class HealthApiTests(TestCase):
     def test_health_ok(self) -> None:

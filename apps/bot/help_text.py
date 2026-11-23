@@ -1,0 +1,17 @@
+HELP_MESSAGE = (
+    "📋 **Comandos**\n"
+    "/start — apresentação\n"
+    "/help ou /comandos — esta mensagem\n"
+    "/hoje — resumo do dia (também `/hoje theo`, `mercado`, `atrasadas`)\n"
+    "/desfazer — reverte a última ação (5 min)\n"
+    "/lista · `/lista tarefas` · `/lista theo` — sem Groq\n"
+    "/resumo — panorama mercado+tarefas+agenda\n"
+    "/prefs — contexto padrão e feedback\n\n"
+    "**Exemplos (texto ou áudio)**\n"
+    "• Mercado: «colocar leite e pão na lista» · «o que falta comprar?»\n"
+    "• Tarefas: «tarefa theo: entregar trabalho até sexta» · «concluí relatório»\n"
+    "• Agenda: «compromisso amanhã 15h dentista»\n"
+    "• Lembretes: «me lembre às 7h de tomar remédio»\n"
+    "• Notas: «anotar ideia do projeto X»\n\n"
+    "Em duplicatas, use os botões **Sim**, **Não** ou **Ver lista**."
+)
