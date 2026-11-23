@@ -41,17 +41,27 @@ export async function unmarkShoppingBought(itemId: number): Promise<void> {
   return patchShoppingBought(itemId, false);
 }
 
-export async function completeTask(taskId: number): Promise<void> {
+async function patchTaskStatus(taskId: number, status: "done" | "pending"): Promise<void> {
   const base = apiBase();
   const res = await fetch(`${base}/api/pwa/tasks/${taskId}/`, {
     method: "PATCH",
     headers: {
       Accept: "application/json",
+      "Content-Type": "application/json",
       ...pwaAuthHeaders(),
     },
+    body: JSON.stringify({ status }),
   });
   if (res.status === 401) throw new Error("Token inválido ou ausente.");
   if (!res.ok) throw new Error(await parseError(res));
+}
+
+export async function completeTask(taskId: number): Promise<void> {
+  return patchTaskStatus(taskId, "done");
+}
+
+export async function reopenTask(taskId: number): Promise<void> {
+  return patchTaskStatus(taskId, "pending");
 }
 
 export async function createShoppingItem(

@@ -17,10 +17,10 @@ Superfície **`/app/`** evoluindo de leitora para **painel tátil** do my-agent,
 - `POST /api/pwa/tasks/` — título + contexto opcional  
 - FAB “+” no PWA; duplicata no mercado → 409  
 
-## 4.3 Desfazer tarefa e histórico
+## 4.3 Desfazer tarefa e histórico ✅ implementado
 
-- `PATCH .../tasks/{id}/` body `{"status": "pending"}` (reabrir)  
-- Snapshot: `tasks_done_recent` (7 dias) com reabrir  
+- `PATCH .../tasks/{id}/` body `{"status": "pending"}` (reabrir) ou `"done"`  
+- Snapshot: `tasks_done_recent` (7 dias) + **Reabrir** na aba Hoje  
 
 ## 4.4 Compromissos avançados
 

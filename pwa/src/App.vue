@@ -4,6 +4,7 @@ import {
   completeTask,
   createShoppingItem,
   createTask,
+  reopenTask,
   dismissEvent,
   markShoppingBought,
   unmarkShoppingBought,
@@ -171,12 +172,34 @@ async function toggleTaskDone(taskId: number) {
   error.value = "";
   try {
     await completeTask(taskId);
+    if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(12);
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Falha ao concluir tarefa";
   } finally {
     busyTasks.value.delete(taskId);
   }
+}
+
+async function undoTaskDone(taskId: number) {
+  if (busyTasks.value.has(taskId)) return;
+  busyTasks.value.add(taskId);
+  error.value = "";
+  try {
+    await reopenTask(taskId);
+    await load();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Falha ao reabrir tarefa";
+  } finally {
+    busyTasks.value.delete(taskId);
+  }
+}
+
+function doneWhenLabel(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function taskDueLabel(task: PwaSnapshot["tasks_pending"][0]): string {
@@ -367,6 +390,34 @@ onMounted(() => {
             </li>
           </ul>
           <p v-else class="text-sm text-slate-500">Nenhuma tarefa pendente.</p>
+        </div>
+        <div v-if="snapshot.tasks_done_recent?.length" class="border-t border-slate-800 pt-6">
+          <h3 class="mb-2 text-sm font-medium uppercase tracking-wide text-slate-500">
+            Concluídas recentes
+          </h3>
+          <ul class="space-y-2">
+            <li
+              v-for="task in snapshot.tasks_done_recent"
+              :key="`d-${task.id}`"
+              class="flex items-start gap-3 rounded-xl border border-slate-800/80 bg-slate-950/50 px-4 py-2.5 text-sm"
+            >
+              <span class="flex-1 text-slate-500">
+                <span class="text-slate-400">[{{ task.context }}]</span>
+                <span class="line-through">{{ task.title }}</span>
+                <span v-if="task.completed_at" class="text-slate-600">
+                  · {{ doneWhenLabel(task.completed_at) }}
+                </span>
+              </span>
+              <button
+                type="button"
+                class="shrink-0 rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 disabled:opacity-40"
+                :disabled="busyTasks.has(task.id)"
+                @click="undoTaskDone(task.id)"
+              >
+                Reabrir
+              </button>
+            </li>
+          </ul>
         </div>
         <div>
           <h3 class="mb-2 text-sm font-medium uppercase tracking-wide text-slate-500">Compromissos hoje</h3>

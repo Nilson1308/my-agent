@@ -20,6 +20,7 @@ from apps.memory.pwa_mutations import (
     pwa_create_task,
     pwa_dismiss_event,
     pwa_mark_shopping_bought,
+    pwa_reopen_task,
 )
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
@@ -159,11 +160,16 @@ class ShoppingPatchOut(Schema):
     is_bought: bool
 
 
+class TaskPatchIn(Schema):
+    status: str = "done"
+
+
 class TaskPatchOut(Schema):
     id: int
     title: str
     status: str
-    completed_at: str
+    completed_at: str | None = None
+    context: str | None = None
 
 
 class EventPatchIn(Schema):
@@ -180,7 +186,7 @@ class EventPatchOut(Schema):
 def _pwa_mutation_http(exc: PwaMutationError) -> None:
     if exc.code == "not_found":
         code = 404
-    elif exc.code in ("already_done", "duplicate"):
+    elif exc.code in ("already_done", "duplicate", "already_pending"):
         code = 409
     else:
         code = 400
@@ -253,8 +259,10 @@ def pwa_shopping_patch(request, item_id: int, payload: ShoppingPatchIn):
     auth=pwa_token_auth,
     response={200: TaskPatchOut, 404: dict, 409: dict},
 )
-def pwa_task_complete(request, task_id: int):
+def pwa_task_patch(request, task_id: int, payload: TaskPatchIn):
     try:
+        if payload.status == "pending":
+            return pwa_reopen_task(task_id)
         return pwa_complete_task(task_id)
     except PwaMutationError as exc:
         _pwa_mutation_http(exc)

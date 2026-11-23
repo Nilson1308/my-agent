@@ -19,6 +19,8 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). API read-only; `work-agent` reu
 - Snapshot inclui `shopping.bought_recent` (7 dias)
 - `POST /api/pwa/shopping/` — `{"name", "quantity"?}`
 - `POST /api/pwa/tasks/` — `{"title", "context"?}`
+- `PATCH /api/pwa/tasks/{id}/` — `{"status": "pending"}` reabre; `"done"` conclui
+- Snapshot: `tasks_done_recent`
 
 **Erros:**
 

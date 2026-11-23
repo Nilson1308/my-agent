@@ -31,6 +31,24 @@ def pwa_mark_shopping_bought(item_id: int, *, bought: bool = True) -> dict:
     return {"id": item.pk, "name": item.name, "is_bought": item.is_bought}
 
 
+def pwa_reopen_task(task_id: int) -> dict:
+    task = Task.objects.filter(pk=task_id, status=TaskStatus.DONE).first()
+    if not task:
+        existing = Task.objects.filter(pk=task_id).first()
+        if existing and existing.status == TaskStatus.PENDING:
+            raise PwaMutationError("already_pending", "Tarefa já está pendente.")
+        raise PwaMutationError("not_found", "Tarefa concluída não encontrada.")
+    task.status = TaskStatus.PENDING
+    task.completed_at = None
+    task.save(update_fields=["status", "completed_at"])
+    return {
+        "id": task.pk,
+        "title": task.title,
+        "status": task.status,
+        "context": task.context,
+    }
+
+
 def pwa_complete_task(task_id: int) -> dict:
     task = Task.objects.filter(pk=task_id, status=TaskStatus.PENDING).first()
     if not task:

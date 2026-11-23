@@ -86,7 +86,12 @@ class PwaApiTests(TestCase):
         self.assertEqual(r1.status_code, 200)
         item.refresh_from_db()
         self.assertTrue(item.is_bought)
-        r2 = client.patch(f"/api/pwa/tasks/{task.pk}/", **headers)
+        r2 = client.patch(
+            f"/api/pwa/tasks/{task.pk}/",
+            data='{"status": "done"}',
+            content_type="application/json",
+            **headers,
+        )
         self.assertEqual(r2.status_code, 200)
         task.refresh_from_db()
         self.assertEqual(task.status, "done")
@@ -145,6 +150,26 @@ class PwaApiTests(TestCase):
         )
         self.assertEqual(r2.status_code, 200)
         self.assertTrue(Task.objects.filter(title="Ligar pro colégio", context="theo").exists())
+
+    def test_pwa_reopen_task(self) -> None:
+        task = Task.objects.create(
+            title="Reabrir teste",
+            context="casa",
+            status="done",
+            completed_at=timezone.now(),
+        )
+        client = Client()
+        headers = {"HTTP_X_PWA_TOKEN": "test-pwa-token"}
+        r = client.patch(
+            f"/api/pwa/tasks/{task.pk}/",
+            data='{"status": "pending"}',
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(r.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.status, "pending")
+        self.assertIsNone(task.completed_at)
 
 
 @override_settings()

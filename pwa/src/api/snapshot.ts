@@ -9,6 +9,12 @@ export type TaskRow = {
   due_date: string | null;
   due_at: string | null;
 };
+export type TaskDoneRow = {
+  id: number;
+  title: string;
+  context: string;
+  completed_at: string | null;
+};
 export type EventRow = {
   id: number;
   title: string;
@@ -25,6 +31,7 @@ export type PwaSnapshot = {
     bought_recent: ShoppingBoughtRow[];
   };
   tasks_pending: TaskRow[];
+  tasks_done_recent: TaskDoneRow[];
   events_today: EventRow[];
 };
 
