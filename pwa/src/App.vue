@@ -21,10 +21,11 @@ import {
 } from "./api/snapshot";
 import { createPairingLink, exchangePairingCode } from "./api/pairing";
 import { clearPwaToken, getPwaToken, setPwaToken } from "./auth";
-import { sendChatMessage } from "./api/chat";
+import { sendChatAudio, sendChatMessage } from "./api/chat";
+import GeofenceMap from "./components/GeofenceMap.vue";
 import { subscribeMyAgentPush } from "./push";
 
-type Tab = "home" | "shopping" | "today" | "chat";
+type Tab = "home" | "shopping" | "today" | "chat" | "map";
 
 type ChatLine = { role: "user" | "assistant"; text: string };
 
@@ -54,6 +55,9 @@ const pairingBusy = ref(false);
 const chatLines = ref<ChatLine[]>([]);
 const chatInput = ref("");
 const chatBusy = ref(false);
+const recording = ref(false);
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
 
 const { toastMessage, showToast } = useToast();
 
@@ -295,6 +299,48 @@ async function enablePush() {
   }
 }
 
+async function toggleRecord() {
+  if (chatBusy.value) return;
+  if (!recording.value) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      error.value = "Gravação não suportada neste navegador.";
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+      mediaRecorder.start();
+      recording.value = true;
+    } catch {
+      error.value = "Permissão de microfone negada.";
+    }
+    return;
+  }
+  recording.value = false;
+  mediaRecorder?.stop();
+  mediaRecorder?.stream.getTracks().forEach((t) => t.stop());
+  const blob = new Blob(audioChunks, { type: "audio/webm" });
+  if (!blob.size) return;
+  chatBusy.value = true;
+  chatLines.value.push({ role: "user", text: "🎤 Áudio…" });
+  try {
+    const res = await sendChatAudio(blob);
+    chatLines.value.push({ role: "assistant", text: res.reply });
+    await load();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Falha no áudio";
+    error.value = msg;
+    chatLines.value.push({ role: "assistant", text: msg });
+  } finally {
+    chatBusy.value = false;
+    mediaRecorder = null;
+  }
+}
+
 async function submitChat() {
   const text = chatInput.value.trim();
   if (!text || chatBusy.value) return;
@@ -410,6 +456,7 @@ onMounted(async () => {
           v-for="t in [
             { id: 'home', label: 'Início' },
             { id: 'chat', label: 'Chat' },
+            { id: 'map', label: 'Mapa' },
             { id: 'shopping', label: 'Mercado' },
             { id: 'today', label: 'Hoje' },
           ]"
@@ -519,6 +566,20 @@ onMounted(async () => {
               :disabled="chatBusy"
             />
             <button
+              type="button"
+              class="shrink-0 rounded-xl border px-3 py-3 text-sm"
+              :class="
+                recording
+                  ? 'border-red-600 bg-red-950/50 text-red-200'
+                  : 'border-slate-600 text-slate-300'
+              "
+              :disabled="chatBusy"
+              :aria-pressed="recording"
+              @click="toggleRecord"
+            >
+              {{ recording ? "■" : "🎤" }}
+            </button>
+            <button
               type="submit"
               class="shrink-0 rounded-xl bg-sky-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
               :disabled="chatBusy || !chatInput.trim()"
@@ -527,6 +588,10 @@ onMounted(async () => {
             </button>
           </form>
         </div>
+      </section>
+
+      <section v-else-if="tab === 'map'">
+        <GeofenceMap />
       </section>
 
       <section v-else-if="tab === 'shopping' && snapshot">

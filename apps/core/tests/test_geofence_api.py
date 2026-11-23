@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from apps.core.pwa_guard import PWA_RL_WRITE_PREFIX
 
-from apps.memory.models import Event, PwaMutationLog, ShoppingItem, Task
+from apps.memory.models import Event, GeofenceEvent, PwaMutationLog, ShoppingItem, Task
 
 
 @override_settings(
@@ -40,7 +40,7 @@ class GeofenceApiTests(TestCase):
     def test_geofence_sent(self, _list, _send) -> None:
         response = self.client.post(
             "/api/webhooks/geofence/",
-            data='{"location":"mercado"}',
+            data='{"location":"mercado","lat":-23.52,"lon":-46.19}',
             content_type="application/json",
             HTTP_X_WEBHOOK_TOKEN="test-geofence-token",
         )
@@ -49,6 +49,9 @@ class GeofenceApiTests(TestCase):
         self.assertEqual(data["status"], "sent")
         self.assertEqual(data["items_count"], 2)
         self.assertTrue(data["telegram_sent"])
+        ev = GeofenceEvent.objects.latest("created_at")
+        self.assertEqual(ev.location_label, "mercado")
+        self.assertAlmostEqual(ev.latitude, -23.52)
 
     @patch("apps.core.api.send_message_sync", return_value=True)
     @patch("apps.core.api.format_active_shopping_list", return_value=("", 0))
@@ -64,6 +67,9 @@ class GeofenceApiTests(TestCase):
         self.assertEqual(data["status"], "empty")
         self.assertEqual(data["items_count"], 0)
         self.assertTrue(data["telegram_sent"])
+        self.assertEqual(GeofenceEvent.objects.count(), 1)
+        ev = GeofenceEvent.objects.latest("created_at")
+        self.assertEqual(ev.status, "empty")
 
 
 @override_settings(PWA_API_TOKEN="test-pwa-token", PWA_API_TOKEN_PREVIOUS="")
@@ -306,6 +312,25 @@ class PwaApiTests(TestCase):
         self.assertTrue(
             InteractionLog.objects.filter(channel=InteractionChannel.PWA).exists()
         )
+
+    def test_pwa_geofence_events_list(self) -> None:
+        GeofenceEvent.objects.create(
+            location_label="casa",
+            latitude=-23.5,
+            longitude=-46.2,
+            status="sent",
+            items_count=3,
+            telegram_sent=True,
+        )
+        client = Client()
+        r = client.get(
+            "/api/pwa/geofence/events/",
+            HTTP_X_PWA_TOKEN="test-pwa-token",
+        )
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["location_label"], "casa")
 
 
 @override_settings()

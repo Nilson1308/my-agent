@@ -105,6 +105,25 @@ class Reminder(models.Model):
         return f"{self.title} @ {self.remind_at:%d/%m %H:%M}"
 
 
+class GeofenceEvent(models.Model):
+    location_label = models.CharField(max_length=128, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    client_ip = models.GenericIPAddressField(null=True, blank=True)
+    status = models.CharField(max_length=24, db_index=True)
+    items_count = models.PositiveIntegerField(default=0)
+    telegram_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "evento geofence"
+        verbose_name_plural = "eventos geofence"
+
+    def __str__(self) -> str:
+        return f"{self.location_label or 'geofence'} @ {self.created_at:%d/%m %H:%M}"
+
+
 class PwaPushSubscription(models.Model):
     endpoint = models.URLField(max_length=500, unique=True)
     p256dh = models.CharField(max_length=255)

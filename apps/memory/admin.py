@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from apps.memory.models import (
     Event,
+    GeofenceEvent,
     InteractionLog,
     Note,
     PwaMutationLog,
@@ -61,6 +62,22 @@ class NoteAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Embedding")
     def has_embedding(self, obj: Note) -> bool:
         return obj.embedding is not None
+
+
+@admin.register(GeofenceEvent)
+class GeofenceEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "location_label",
+        "status",
+        "items_count",
+        "telegram_sent",
+        "latitude",
+        "longitude",
+        "created_at",
+    )
+    list_filter = ("status", "telegram_sent", "created_at")
+    search_fields = ("location_label", "client_ip")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(PwaPushSubscription)

@@ -7,12 +7,18 @@ import time
 from django.conf import settings
 from django.db import connection
 import redis
-from ninja import NinjaAPI, Schema
+from ninja import File, NinjaAPI, Schema
+from ninja.files import UploadedFile
 from ninja.errors import HttpError
 from ninja.security import APIKeyHeader
 
+import os
+import tempfile
+
+from apps.ai.groq_service import transcribe_audio
 from apps.bot.telegram_client import get_send_failure_count, send_message_sync
 from apps.core.geofence_guard import client_ip, enforce_geofence_rate_limit
+from apps.core.geofence_log import record_geofence_event
 from apps.core.pwa_auth import configured_pwa_tokens, pwa_token_is_valid
 from apps.core.pwa_guard import enforce_pwa_write_rate_limit
 from apps.core.pwa_pairing import (
@@ -35,7 +41,7 @@ from apps.memory.pwa_mutations import (
     pwa_snooze_event,
 )
 from apps.memory.agent_pipeline import run_agent_message
-from apps.memory.models import InteractionChannel, InteractionLog
+from apps.memory.models import GeofenceEvent, InteractionChannel, InteractionLog
 from apps.memory.pwa_snapshot import build_pwa_snapshot
 from apps.memory.services import format_active_shopping_list
 
@@ -58,6 +64,8 @@ class GeofenceWebhookAuth(APIKeyHeader):
 
 class GeofencePayload(Schema):
     location: str | None = None
+    lat: float | None = None
+    lon: float | None = None
 
 
 class GeofenceOut(Schema):
@@ -133,18 +141,22 @@ def geofence_webhook(request, payload: GeofencePayload | None = None) -> Geofenc
     enforce_geofence_rate_limit(request)
     message, count = format_active_shopping_list()
 
+    label = (payload.location if payload else None) or ""
+    lat = payload.lat if payload else None
+    lon = payload.lon if payload else None
+
     if count == 0:
         text = _location_prefix(payload) + EMPTY_GEOFENCE_MESSAGE
         telegram_sent = send_message_sync(text)
         status = "empty"
-        _log_geofence(ip, count, telegram_sent, status, started)
+        _finish_geofence(ip, count, telegram_sent, status, started, label, lat, lon)
         return GeofenceOut(status=status, items_count=0, telegram_sent=telegram_sent)
 
     message = _location_prefix(payload) + message
     telegram_sent = send_message_sync(message)
     if not telegram_sent:
         status = "telegram_failed"
-        _log_geofence(ip, count, False, status, started)
+        _finish_geofence(ip, count, False, status, started, label, lat, lon)
         return GeofenceOut(
             status=status,
             items_count=count,
@@ -152,7 +164,7 @@ def geofence_webhook(request, payload: GeofencePayload | None = None) -> Geofenc
         )
 
     status = "sent"
-    _log_geofence(ip, count, True, status, started)
+    _finish_geofence(ip, count, True, status, started, label, lat, lon)
     return GeofenceOut(status=status, items_count=count, telegram_sent=True)
 
 
@@ -485,6 +497,115 @@ def pwa_event_snooze(request, event_id: int, payload: EventSnoozeIn):
     except PwaMutationError as exc:
         _pwa_mutation_http(exc)
     raise HttpError(500, "Erro interno")
+
+
+class GeofenceEventOut(Schema):
+    id: int
+    location_label: str
+    latitude: float | None
+    longitude: float | None
+    status: str
+    items_count: int
+    telegram_sent: bool
+    created_at: str
+
+
+@api.get(
+    "/pwa/geofence/events/",
+    auth=pwa_token_auth,
+    response=list[GeofenceEventOut],
+)
+def pwa_geofence_events(request, limit: int = 40):
+    if not configured_pwa_tokens():
+        raise HttpError(503, "PWA não configurado.")
+    cap = max(1, min(limit, 100))
+    rows = GeofenceEvent.objects.order_by("-created_at")[:cap]
+    return [
+        GeofenceEventOut(
+            id=e.pk,
+            location_label=e.location_label,
+            latitude=e.latitude,
+            longitude=e.longitude,
+            status=e.status,
+            items_count=e.items_count,
+            telegram_sent=e.telegram_sent,
+            created_at=e.created_at.isoformat(),
+        )
+        for e in rows
+    ]
+
+
+@api.post("/pwa/chat/audio/", auth=pwa_token_auth, response={200: PwaChatOut, 400: dict, 503: dict})
+def pwa_chat_audio(request, audio: UploadedFile = File(...)):
+    if not configured_pwa_tokens():
+        raise HttpError(503, "PWA não configurado.")
+    enforce_pwa_write_rate_limit(request)
+    max_bytes = int(getattr(settings, "PWA_AUDIO_MAX_BYTES", 5 * 1024 * 1024))
+    if audio.size and audio.size > max_bytes:
+        raise HttpError(400, "Áudio muito grande (máx. 5 MB).")
+    suffix = ".webm"
+    name = (audio.name or "").lower()
+    if name.endswith(".ogg"):
+        suffix = ".ogg"
+    elif name.endswith(".m4a") or name.endswith(".mp4"):
+        suffix = ".m4a"
+    elif name.endswith(".mp3"):
+        suffix = ".mp3"
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            for chunk in audio.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+        text = transcribe_audio(tmp_path)
+    except Exception as exc:
+        logger.exception("pwa audio transcribe: %s", exc)
+        raise HttpError(400, "Não foi possível transcrever o áudio.") from exc
+    finally:
+        if tmp_path and os.path.isfile(tmp_path):
+            os.unlink(tmp_path)
+
+    agent_reply = run_agent_message(
+        text,
+        channel=InteractionChannel.PWA,
+        input_type="audio",
+    )
+    outcome = ""
+    if agent_reply.interaction_log_id:
+        log = InteractionLog.objects.filter(pk=agent_reply.interaction_log_id).first()
+        if log:
+            outcome = log.llm_outcome or ""
+    elif agent_reply.pending_confirmation_id:
+        outcome = "pending_confirmation"
+    log_pwa_mutation(request, "chat_audio", target_type="interaction")
+    return PwaChatOut(
+        reply=agent_reply.message,
+        llm_outcome=outcome,
+        interaction_log_id=agent_reply.interaction_log_id,
+        pending_confirmation=agent_reply.pending_confirmation_id is not None,
+    )
+
+
+def _finish_geofence(
+    ip: str,
+    items_count: int,
+    telegram_sent: bool,
+    status: str,
+    started: float,
+    location_label: str,
+    latitude: float | None,
+    longitude: float | None,
+) -> None:
+    _log_geofence(ip, items_count, telegram_sent, status, started)
+    record_geofence_event(
+        client_ip=ip,
+        status=status,
+        items_count=items_count,
+        telegram_sent=telegram_sent,
+        location_label=location_label,
+        latitude=latitude,
+        longitude=longitude,
+    )
 
 
 def _log_geofence(

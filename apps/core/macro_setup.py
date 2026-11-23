@@ -31,13 +31,14 @@ def macro_setup_page(request: HttpRequest) -> HttpResponse:
     <li><strong>Método:</strong> POST</li>
     <li><strong>URL:</strong> <code>{url}</code></li>
     <li><strong>Content-Type:</strong> application/json</li>
-    <li><strong>Body:</strong> <code>{{"location":"mercado"}}</code></li>
+    <li><strong>Body:</strong> <code>{{"location":"mercado","lat":-23.52,"lon":-46.19}}</code>
+    (lat/lon opcionais — aparecem no mapa do PWA)</li>
   </ul>
   <h2>Teste (no PC com token)</h2>
   <pre>curl -X POST "{url}" \\
   -H "Content-Type: application/json" \\
   -H "X-Webhook-Token: SEU_TOKEN" \\
-  -d '{{"location":"mercado"}}'</pre>
+  -d '{{"location":"mercado","lat":-23.52,"lon":-46.19}}'</pre>
   <p>Resposta esperada: <code>status</code>, <code>items_count</code>, <code>telegram_sent</code>.
   Rate limit: {rate}s por IP.</p>
   <p><a href="/api/health/">Health API</a></p>

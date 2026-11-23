@@ -29,9 +29,15 @@ PWA em **`/app/`** (código em `my-agent/pwa/`). Leitura + escrita tátil; `work
 - `POST /api/pwa/push/subscribe/` — body Web Push `endpoint` + `keys`
 - `POST /api/pwa/push/unsubscribe/`
 
-**Chat agente (5.1):**
+**Chat agente (5.1–5.2):**
 
 - `POST /api/pwa/chat/` — `{"text": "..."}` — mesma IA do Telegram (`run_agent_message`); log `channel=pwa`
+- `POST /api/pwa/chat/audio/` — multipart campo `audio` → Whisper
+
+**Geofence / mapa (5.3):**
+
+- Webhook body: `location`, opcional `lat`, `lon`
+- `GET /api/pwa/geofence/events/?limit=40`
 
 **Pairing / rotação (4.7):**
 
