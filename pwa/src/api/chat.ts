@@ -24,10 +24,14 @@ async function parseError(res: Response): Promise<string> {
   return `Erro ${res.status}`;
 }
 
-export async function sendChatAudio(blob: Blob, filename = "voice.webm"): Promise<ChatResponse> {
+export async function sendChatAudio(
+  blob: Blob | File,
+  filename = "voice.webm",
+): Promise<ChatResponse> {
   const base = apiBase();
   const form = new FormData();
-  form.append("audio", blob, filename);
+  const name = blob instanceof File && blob.name ? blob.name : filename;
+  form.append("audio", blob, name);
   const res = await fetch(`${base}/api/pwa/chat/audio/`, {
     method: "POST",
     headers: { Accept: "application/json", ...pwaAuthHeaders() },

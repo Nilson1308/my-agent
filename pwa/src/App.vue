@@ -25,6 +25,7 @@ import { sendChatAudio, sendChatMessage } from "./api/chat";
 import { uploadImage, uploadPdf } from "./api/documents";
 import GeofenceMap from "./components/GeofenceMap.vue";
 import { fetchObservability, formatObservabilityWhen, type PwaObservability } from "./api/observability";
+import { filenameForBlobType, finishMediaRecorder, pickRecorderMime } from "./composables/audioRecord";
 import { subscribeMyAgentPush } from "./push";
 
 type Tab = "home" | "shopping" | "today" | "chat" | "map";
@@ -64,6 +65,7 @@ const pdfBusy = ref(false);
 const imageBusy = ref(false);
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
+let recordMime = "audio/webm";
 
 const { toastMessage, showToast } = useToast();
 
@@ -343,29 +345,49 @@ async function toggleRecord() {
       error.value = "Gravação não suportada neste navegador.";
       return;
     }
+    if (typeof MediaRecorder === "undefined") {
+      error.value = "Este navegador não grava áudio no chat — use texto ou outro navegador.";
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
+      recordMime = pickRecorderMime() || "audio/webm";
+      const options: MediaRecorderOptions = recordMime ? { mimeType: recordMime } : {};
+      try {
+        mediaRecorder = new MediaRecorder(stream, options);
+      } catch {
+        mediaRecorder = new MediaRecorder(stream);
+      }
+      recordMime = mediaRecorder.mimeType || recordMime;
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunks.push(e.data);
       };
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       recording.value = true;
     } catch {
       error.value = "Permissão de microfone negada.";
     }
     return;
   }
+
+  const recorder = mediaRecorder;
   recording.value = false;
-  mediaRecorder?.stop();
-  mediaRecorder?.stream.getTracks().forEach((t) => t.stop());
-  const blob = new Blob(audioChunks, { type: "audio/webm" });
-  if (!blob.size) return;
+  if (!recorder || recorder.state === "inactive") {
+    mediaRecorder = null;
+  }
+  if (!recorder) return;
+
   chatBusy.value = true;
-  chatLines.value.push({ role: "user", text: "🎤 Áudio…" });
+  error.value = "";
   try {
-    const res = await sendChatAudio(blob);
+    const blob = await finishMediaRecorder(recorder, audioChunks, recordMime);
+    if (!blob.size) {
+      showToast("Áudio vazio — fale 1–2 s antes de parar");
+      return;
+    }
+    chatLines.value.push({ role: "user", text: "🎤 Áudio…" });
+    const res = await sendChatAudio(blob, filenameForBlobType(blob.type));
     chatLines.value.push({ role: "assistant", text: res.reply });
     await load();
   } catch (e) {
@@ -375,6 +397,28 @@ async function toggleRecord() {
   } finally {
     chatBusy.value = false;
     mediaRecorder = null;
+    audioChunks = [];
+  }
+}
+
+async function onAudioFileSelected(ev: Event) {
+  const input = ev.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || chatBusy.value) return;
+  chatBusy.value = true;
+  error.value = "";
+  chatLines.value.push({ role: "user", text: `🎤 ${file.name}` });
+  try {
+    const res = await sendChatAudio(file, file.name || "voice.m4a");
+    chatLines.value.push({ role: "assistant", text: res.reply });
+    await load();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Falha no áudio";
+    error.value = msg;
+    chatLines.value.push({ role: "assistant", text: msg });
+  } finally {
+    chatBusy.value = false;
   }
 }
 
@@ -691,6 +735,17 @@ onMounted(async () => {
           Mesmo assistente do Telegram: mercado, tarefas, agenda, notas e busca na memória.
         </p>
         <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <label class="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-slate-300">
+            Áudio (arquivo)
+            <input
+              type="file"
+              accept="audio/*"
+              capture
+              class="hidden"
+              :disabled="chatBusy"
+              @change="onAudioFileSelected"
+            />
+          </label>
           <label class="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-slate-300">
             {{ imageBusy ? "Foto…" : "Foto / OCR" }}
             <input

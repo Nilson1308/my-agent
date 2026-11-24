@@ -552,6 +552,8 @@ def pwa_chat_audio(request, audio: UploadedFile = File(...)):
         raise HttpError(503, "PWA não configurado.")
     enforce_pwa_write_rate_limit(request)
     max_bytes = int(getattr(settings, "PWA_AUDIO_MAX_BYTES", 5 * 1024 * 1024))
+    if audio.size is not None and audio.size <= 0:
+        raise HttpError(400, "Áudio vazio.")
     if audio.size and audio.size > max_bytes:
         raise HttpError(400, "Áudio muito grande (máx. 5 MB).")
     suffix = ".webm"
